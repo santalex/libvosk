@@ -1,7 +1,9 @@
 # Vosk API Multi-Platform (64-Bit & 32-Bit) Cross-Arch Prebuilt Distribution
 
+[![Build and Distribute LibVosk Multi-Platform](https://github.com/santalex/libvosk/actions/workflows/build.yml/badge.svg)](https://github.com/santalex/libvosk/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Platform Matrix](https://img.shields.io/badge/Platforms-macOS%20%7C%20iOS%20%7C%20tvOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Android%20%7C%20RISC--V-brightgreen.svg)]()
+
 
 This repository provides an automated, hermetic, Docker-based multi-platform build engine and binary distribution for [Vosk API](https://github.com/alphacep/vosk-api) (v0.3.50+), covering 64-bit, 32-bit, and cross-architecture targets across Desktop, Mobile, TV, and Embedded Linux ecosystems.
 
