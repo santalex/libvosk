@@ -1,0 +1,16 @@
+# Binary Output Directories
+dist/
+release_packages/
+download_dist/
+
+# Apple Native Build Clones & Temporary Workdirs
+src/apple/dist/
+src/apple/kaldi/
+src/apple/vosk-api/
+src/apple/openfst/
+src/apple/build/
+
+# OS / Editor Junk Files
+.DS_Store
+*.tmp
+*.log

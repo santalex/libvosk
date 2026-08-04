@@ -1,0 +1,369 @@
+name: Build and Distribute LibVosk Multi-Platform
+
+on:
+  workflow_dispatch:
+    inputs:
+      vosk_tag:
+        description: 'Vosk API Git Tag (e.g. v0.3.50)'
+        required: true
+        default: 'v0.3.50'
+      create_release:
+        description: 'Create GitHub Release'
+        required: true
+        type: boolean
+        default: true
+  push:
+    tags:
+      - 'libvosk-v*'
+      - 'v*'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  build-vosk-matrix:
+    name: Build (${{ matrix.os }}-${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS
+          - os: macos
+            arch: arm64
+            runner: macos-14
+          - os: macos
+            arch: x86_64
+            runner: macos-14
+          # iOS
+          - os: ios
+            arch: universal
+            runner: macos-14
+          # tvOS
+          - os: tvos
+            arch: universal
+            runner: macos-14
+          # Windows
+          - os: windows
+            arch: x86_64
+            runner: ubuntu-latest
+          - os: windows
+            arch: arm64
+            runner: ubuntu-latest
+          - os: windows
+            arch: x86
+            runner: ubuntu-latest
+          # Linux
+          - os: linux
+            arch: x86_64
+            runner: ubuntu-latest
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-latest
+          - os: linux
+            arch: riscv64
+            runner: ubuntu-latest
+          - os: linux
+            arch: armv7l
+            runner: ubuntu-latest
+          - os: linux
+            arch: x86
+            runner: ubuntu-latest
+          # Android
+          - os: android
+            arch: arm64-v8a
+            runner: ubuntu-latest
+          - os: android
+            arch: x86_64
+            runner: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install macOS Build Tools
+        if: runner.os == 'macOS'
+        run: |
+          brew install autoconf automake libtool
+
+      - name: Build Vosk Target
+        run: |
+          VOSK_TAG="${{ inputs.vosk_tag || 'v0.3.50' }}"
+          ./build.sh --os ${{ matrix.os }} --arch ${{ matrix.arch }} --vosk-tag "${VOSK_TAG}" --yes
+
+      - name: Upload Target Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vosk-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            dist/${{ matrix.os }}/${{ matrix.arch }}/
+            dist/apple/${{ matrix.os }}/${{ matrix.arch }}/
+            dist/apple/ios/
+            dist/apple/tvos/
+
+  assemble-and-release:
+    name: Assemble Artifacts & Publish Release
+    needs: build-vosk-matrix
+    runs-on: macos-14
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download All Matrix Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: download_dist/
+
+      - name: Assemble Separated (Shared/Static/XCFramework) Packages & Python Wheels
+        run: |
+          mkdir -p release_packages
+          VOSK_TAG="${{ inputs.vosk_tag || github.ref_name || 'v0.3.50' }}"
+          
+          # 1. 针对 Windows / Linux / Android 平台，拆分 shared (动态库) 与 static (静态库) 压缩包
+          for dir in download_dist/vosk-*; do
+            if [ -d "$dir" ]; then
+              target_name=$(basename "$dir" | sed "s/vosk-//")
+              
+              # 跳过 macOS / iOS / tvOS，它们由后方 Apple 逻辑专属打包
+              if [[ "$target_name" == macos* ]] || [[ "$target_name" == ios* ]] || [[ "$target_name" == tvos* ]]; then
+                continue
+              fi
+
+              pkg_prefix="libvosk-${VOSK_TAG}-${target_name}"
+              echo "Processing $target_name -> ${pkg_prefix} ..."
+
+              # A. 提取 Shared 动态库包 (.so / .dll / .lib / header)
+              mkdir -p tmp_shared
+              cp "$dir"/vosk_api.h tmp_shared/ 2>/dev/null || true
+              cp "$dir"/*.so tmp_shared/ 2>/dev/null || true
+              cp "$dir"/*.dll tmp_shared/ 2>/dev/null || true
+              cp "$dir"/*.dll.a tmp_shared/ 2>/dev/null || true
+              cp "$dir"/libvosk.lib tmp_shared/ 2>/dev/null || true
+              (cd tmp_shared && zip -r "../../release_packages/${pkg_prefix}-shared.zip" .)
+              rm -rf tmp_shared
+
+              # B. 提取 Static 纯静态库包 (.a / libvosk_static.lib / header)
+              mkdir -p tmp_static
+              cp "$dir"/vosk_api.h tmp_static/ 2>/dev/null || true
+              cp "$dir"/*.a tmp_static/ 2>/dev/null || true
+              cp "$dir"/libvosk_static.lib tmp_static/ 2>/dev/null || true
+              rm -f tmp_static/*.dll.a
+              (cd tmp_static && zip -r "../../release_packages/${pkg_prefix}-static.zip" .)
+              rm -rf tmp_static
+            fi
+          done
+
+          # 2. macOS 平台单架构 (arm64 / x86_64) 动态与静态库拆分
+          for mac_arch in arm64 x86_64; do
+            if [ -d "download_dist/vosk-macos-${mac_arch}" ]; then
+              pkg_prefix="libvosk-${VOSK_TAG}-macos-${mac_arch}"
+              
+              # A. macOS Shared 动态库包 (.dylib + header)
+              mkdir -p tmp_mac_shared
+              cp download_dist/vosk-macos-${mac_arch}/vosk_api.h tmp_mac_shared/ 2>/dev/null || true
+              cp download_dist/vosk-macos-${mac_arch}/*.dylib tmp_mac_shared/ 2>/dev/null || true
+              (cd tmp_mac_shared && zip -r "../../release_packages/${pkg_prefix}-shared.zip" .)
+              rm -rf tmp_mac_shared
+
+              # B. macOS Static 纯静态库包 (.a + header)
+              mkdir -p tmp_mac_static
+              cp download_dist/vosk-macos-${mac_arch}/vosk_api.h tmp_mac_static/ 2>/dev/null || true
+              cp download_dist/vosk-macos-${mac_arch}/*.a tmp_mac_static/ 2>/dev/null || true
+              (cd tmp_mac_static && zip -r "../../release_packages/${pkg_prefix}-static.zip" .)
+              rm -rf tmp_mac_static
+            fi
+          done
+
+          # 3. macOS Universal (Universal .dylib / Universal .a / macOS .xcframework 拆分)
+          if [ -d "download_dist/vosk-macos-arm64" ] && [ -d "download_dist/vosk-macos-x86_64" ]; then
+            echo "Synthesizing macOS Universal binary & XCFramework..."
+            mkdir -p download_dist/vosk-macos-universal
+            cp download_dist/vosk-macos-arm64/vosk_api.h download_dist/vosk-macos-universal/ 2>/dev/null || true
+            
+            lipo -create download_dist/vosk-macos-arm64/libvosk.dylib download_dist/vosk-macos-x86_64/libvosk.dylib -output download_dist/vosk-macos-universal/libvosk.dylib
+            lipo -create download_dist/vosk-macos-arm64/libvosk.a download_dist/vosk-macos-x86_64/libvosk.a -output download_dist/vosk-macos-universal/libvosk.a
+            
+            mkdir -p tmp_headers && cp download_dist/vosk-macos-arm64/vosk_api.h tmp_headers/
+            xcodebuild -create-xcframework \
+                -library download_dist/vosk-macos-universal/libvosk.a \
+                -headers tmp_headers \
+                -output download_dist/vosk-macos-universal/libvosk.xcframework 2>/dev/null || true
+            rm -rf tmp_headers
+
+            # A. Universal Shared 包 (.dylib + header)
+            mkdir -p tmp_uni_shared
+            cp download_dist/vosk-macos-universal/vosk_api.h tmp_uni_shared/
+            cp download_dist/vosk-macos-universal/libvosk.dylib tmp_uni_shared/
+            (cd tmp_uni_shared && zip -r "../../release_packages/libvosk-${VOSK_TAG}-macos-universal-shared.zip" .)
+            rm -rf tmp_uni_shared
+
+            # B. Universal Static 纯静态库包 (.a + header)
+            mkdir -p tmp_uni_static
+            cp download_dist/vosk-macos-universal/vosk_api.h tmp_uni_static/
+            cp download_dist/vosk-macos-universal/libvosk.a tmp_uni_static/
+            (cd tmp_uni_static && zip -r "../../release_packages/libvosk-${VOSK_TAG}-macos-universal-static.zip" .)
+            rm -rf tmp_uni_static
+
+            # C. macOS 专属 XCFramework 包 (.xcframework + header)
+            mkdir -p tmp_mac_xcf
+            cp download_dist/vosk-macos-universal/vosk_api.h tmp_mac_xcf/
+            cp -R download_dist/vosk-macos-universal/libvosk.xcframework tmp_mac_xcf/ 2>/dev/null || true
+            (cd tmp_mac_xcf && zip -r "../../release_packages/libvosk-${VOSK_TAG}-macos-xcframework.zip" .)
+            rm -rf tmp_mac_xcf
+          fi
+
+          # 4. iOS 平台 (纯静态库 -static.zip 与 专属 -xcframework.zip 拆分)
+          if [ -d "download_dist/vosk-ios-universal" ]; then
+            # A. iOS 纯静态库包 (.a + header)
+            mkdir -p tmp_ios_static
+            cp download_dist/vosk-ios-universal/iphoneos_arm64/vosk_api.h tmp_ios_static/ 2>/dev/null || cp download_dist/vosk-macos-arm64/vosk_api.h tmp_ios_static/ 2>/dev/null || true
+            cp -R download_dist/vosk-ios-universal/iphoneos_arm64 tmp_ios_static/ 2>/dev/null || true
+            cp -R download_dist/vosk-ios-universal/iphonesimulator_universal tmp_ios_static/ 2>/dev/null || true
+            (cd tmp_ios_static && zip -r "../../release_packages/libvosk-${VOSK_TAG}-ios-static.zip" .)
+            rm -rf tmp_ios_static
+
+            # B. iOS 专属 XCFramework 包 (.xcframework + header)
+            mkdir -p tmp_ios_xcf
+            cp download_dist/vosk-ios-universal/iphoneos_arm64/vosk_api.h tmp_ios_xcf/ 2>/dev/null || cp download_dist/vosk-macos-arm64/vosk_api.h tmp_ios_xcf/ 2>/dev/null || true
+            cp -R download_dist/vosk-ios-universal/libvosk.xcframework tmp_ios_xcf/ 2>/dev/null || true
+            (cd tmp_ios_xcf && zip -r "../../release_packages/libvosk-${VOSK_TAG}-ios-xcframework.zip" .)
+            rm -rf tmp_ios_xcf
+          fi
+
+          # 5. tvOS 平台 (纯静态库 -static.zip 与 专属 -xcframework.zip 拆分)
+          if [ -d "download_dist/vosk-tvos-universal" ]; then
+            # A. tvOS 纯静态库包 (.a + header)
+            mkdir -p tmp_tvos_static
+            cp download_dist/vosk-tvos-universal/appletvos_arm64/vosk_api.h tmp_tvos_static/ 2>/dev/null || cp download_dist/vosk-macos-arm64/vosk_api.h tmp_tvos_static/ 2>/dev/null || true
+            cp -R download_dist/vosk-tvos-universal/appletvos_arm64 tmp_tvos_static/ 2>/dev/null || true
+            cp -R download_dist/vosk-tvos-universal/appletvsimulator_universal tmp_tvos_static/ 2>/dev/null || true
+            (cd tmp_tvos_static && zip -r "../../release_packages/libvosk-${VOSK_TAG}-tvos-static.zip" .)
+            rm -rf tmp_tvos_static
+
+            # B. tvOS 专属 XCFramework 包 (.xcframework + header)
+            mkdir -p tmp_tvos_xcf
+            cp download_dist/vosk-tvos-universal/appletvos_arm64/vosk_api.h tmp_tvos_xcf/ 2>/dev/null || cp download_dist/vosk-macos-arm64/vosk_api.h tmp_tvos_xcf/ 2>/dev/null || true
+            cp -R download_dist/vosk-tvos-universal/libvosk.xcframework tmp_tvos_xcf/ 2>/dev/null || true
+            (cd tmp_tvos_xcf && zip -r "../../release_packages/libvosk-${VOSK_TAG}-tvos-xcframework.zip" .)
+            rm -rf tmp_tvos_xcf
+          fi
+
+          # 6. Apple 全平台 (macOS + iOS + tvOS) Super XCFramework 大一统包 (重命名为 -apple-xcframework.zip)
+          if [ -d "download_dist/vosk-macos-universal" ] && [ -d "download_dist/vosk-ios-universal" ]; then
+            echo "Synthesizing Apple Super XCFramework..."
+            mkdir -p download_dist/vosk-apple-universal
+            cp download_dist/vosk-macos-arm64/vosk_api.h download_dist/vosk-apple-universal/ 2>/dev/null || true
+            cp download_dist/vosk-macos-universal/libvosk.dylib download_dist/vosk-apple-universal/ 2>/dev/null || true
+
+            mkdir -p tmp_headers && cp download_dist/vosk-macos-arm64/vosk_api.h tmp_headers/
+            
+            XCF_CMD=(xcodebuild -create-xcframework)
+            if [ -f "download_dist/vosk-macos-universal/libvosk.a" ]; then
+              XCF_CMD+=(-library download_dist/vosk-macos-universal/libvosk.a -headers tmp_headers)
+            fi
+            if [ -f "download_dist/vosk-ios-universal/iphoneos_arm64/libvosk.a" ]; then
+              XCF_CMD+=(-library download_dist/vosk-ios-universal/iphoneos_arm64/libvosk.a -headers tmp_headers)
+            fi
+            if [ -f "download_dist/vosk-ios-universal/iphonesimulator_universal/libvosk.a" ]; then
+              XCF_CMD+=(-library download_dist/vosk-ios-universal/iphonesimulator_universal/libvosk.a -headers tmp_headers)
+            fi
+            if [ -f "download_dist/vosk-tvos-universal/appletvos_arm64/libvosk.a" ]; then
+              XCF_CMD+=(-library download_dist/vosk-tvos-universal/appletvos_arm64/libvosk.a -headers tmp_headers)
+            fi
+            if [ -f "download_dist/vosk-tvos-universal/appletvsimulator_universal/libvosk.a" ]; then
+              XCF_CMD+=(-library download_dist/vosk-tvos-universal/appletvsimulator_universal/libvosk.a -headers tmp_headers)
+            fi
+            XCF_CMD+=(-output download_dist/vosk-apple-universal/libvosk.xcframework)
+
+            "${XCF_CMD[@]}" 2>/dev/null || true
+            rm -rf tmp_headers
+
+            (cd download_dist/vosk-apple-universal && zip -r "../../release_packages/libvosk-${VOSK_TAG}-apple-xcframework.zip" .)
+          fi
+
+          # 7. 自动为各平台组装 3 级梯度的 Python Wheel 预编译包 (.whl)
+          echo "Packaging Python Wheels for all platform targets & Universal Wheels..."
+          pip install setuptools wheel cffi 2>/dev/null || true
+          
+          # A. 第一梯度：单目标特定小 Wheel 包 (Single Target)
+          for dir in download_dist/vosk-*; do
+            if [ -d "$dir" ]; then
+              target_name=$(basename "$dir" | sed "s/vosk-//")
+              
+              # 跳过通用 Universal 目录（交给第二、三梯度处理）
+              if [[ "$target_name" == *"universal"* ]]; then
+                continue
+              fi
+
+              dylib_file=$(find "$dir" -maxdepth 2 \( -name "*.dylib" -o -name "*.so" -o -name "*.dll" \) 2>/dev/null | head -n 1)
+              
+              if [ -n "$dylib_file" ]; then
+                echo "Building Single Target Python Wheel for ${target_name} ..."
+                rm -rf tmp_py_build && mkdir -p tmp_py_build/vosk
+                cp -R src/python/vosk/* tmp_py_build/vosk/
+                cp src/python/setup.py tmp_py_build/
+                cp "$dylib_file" tmp_py_build/vosk/
+                
+                (cd tmp_py_build && VOSK_TAG="${VOSK_TAG}" python3 setup.py bdist_wheel --plat-name="${target_name//-/_}") 2>/dev/null || true
+                cp tmp_py_build/dist/*.whl release_packages/ 2>/dev/null || true
+                rm -rf tmp_py_build
+              fi
+            fi
+          done
+
+          # B. 第二梯度：系统 Ecosystem 合并 Wheel 包 (macosx_universal / win_universal / linux_universal / android_universal)
+          for os_sys in macos windows linux android; do
+            echo "Building OS-Universal Python Wheel for ${os_sys} ..."
+            rm -rf tmp_os_build && mkdir -p tmp_os_build/vosk/lib
+            cp -R src/python/vosk/* tmp_os_build/vosk/
+            cp src/python/setup.py tmp_os_build/
+            
+            # 搜集当前 OS 下的所有架构动态库放入 lib/<os>_<arch>/
+            found_count=0
+            for dylib_path in $(find download_dist/vosk-${os_sys}-* \( -name "*.dylib" -o -name "*.so" -o -name "*.dll" \) 2>/dev/null); do
+              arch_sub=$(basename $(dirname "$dylib_path"))
+              mkdir -p "tmp_os_build/vosk/lib/${os_sys}_${arch_sub}"
+              cp "$dylib_path" "tmp_os_build/vosk/lib/${os_sys}_${arch_sub}/"
+              found_count=$((found_count + 1))
+            done
+
+            if [ $found_count -gt 0 ]; then
+              (cd tmp_os_build && VOSK_TAG="${VOSK_TAG}" python3 setup.py bdist_wheel --plat-name="${os_sys}_universal") 2>/dev/null || true
+              cp tmp_os_build/dist/*.whl release_packages/ 2>/dev/null || true
+            fi
+            rm -rf tmp_os_build
+          done
+
+          # C. 第三梯度：全平台大一统 Super Universal Wheel 包 (vosk-*-py3-none-any.whl, ~45MB)
+          echo "Building Super Universal All-in-One Python Wheel (py3-none-any.whl) ..."
+          rm -rf tmp_all_build && mkdir -p tmp_all_build/vosk/lib
+          cp -R src/python/vosk/* tmp_all_build/vosk/
+          cp src/python/setup.py tmp_all_build/
+          
+          for dylib_path in $(find download_dist/vosk-* \( -name "*.dylib" -o -name "*.so" -o -name "*.dll" \) 2>/dev/null); do
+            target_sub=$(basename $(dirname "$dylib_path"))
+            os_sub=$(basename $(dirname $(dirname "$dylib_path")) | sed "s/vosk-//")
+            mkdir -p "tmp_all_build/vosk/lib/${os_sub}_${target_sub}"
+            cp "$dylib_path" "tmp_all_build/vosk/lib/${os_sub}_${target_sub}/"
+          done
+
+          (cd tmp_all_build && VOSK_TAG="${VOSK_TAG}" python3 setup.py bdist_wheel --plat-name="any") 2>/dev/null || true
+          cp tmp_all_build/dist/*.whl release_packages/ 2>/dev/null || true
+          rm -rf tmp_all_build
+
+          # 8. 生成 SHA256 校验和目录文件
+          cd release_packages
+          shasum -a 256 * > SHA256SUMS.txt
+          echo "=============================================================================="
+          echo "  Release Packages List (${VOSK_TAG}):"
+          echo "=============================================================================="
+          ls -lh
+
+      - name: Create GitHub Release
+        if: inputs.create_release || startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release_packages/*
+          name: LibVosk Unofficial Multi-Platform Prebuilt Release (${{ inputs.vosk_tag || github.ref_name }})
+          body: |
+            Unofficial high-performance multi-platform (64-bit / 32-bit & cross-architecture) prebuilt binary packages for Vosk API.
