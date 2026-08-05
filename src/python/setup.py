@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 version = os.environ.get("VOSK_TAG", "0.3.50").lstrip("v")
 
 setup(
-    name="vosk",
+    name="libvosk",
     version=version,
     description="Offline speech recognition API for Python",
     long_description="High-performance offline speech recognition library for Python based on Vosk C API.",
