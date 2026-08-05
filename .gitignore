@@ -1,8 +1,6 @@
 # Binary Output Directories
 dist/
 packages/
-release_packages/
-download_dist/
 tmp*/
 
 # Apple Native Build Clones & Temporary Workdirs

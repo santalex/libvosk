@@ -324,6 +324,11 @@ package_all() {
     # 5. 生成 SHA256SUMS.txt
     (cd "${PKG_DIR}" && shasum -a 256 * > SHA256SUMS.txt 2>/dev/null || true)
 
+    # 6. 调用 tools/verify_packages.py 全量审计校验
+    if command -v python3 >/dev/null 2>&1 && [ -f "${SCRIPT_DIR}/tools/verify_packages.py" ]; then
+        python3 "${SCRIPT_DIR}/tools/verify_packages.py" "${PKG_DIR}"
+    fi
+
     echo "=============================================================================="
     echo "✔ 🎉 产物打包全量完成！输出目录: ${PKG_DIR}"
     echo "=============================================================================="
