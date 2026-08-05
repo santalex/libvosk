@@ -84,8 +84,9 @@ RUN cd /opt \
             HAVE_ACCELERATE=0 \
             HAVE_OPENBLAS=1 \
             HAVE_MKL=0 \
-            USE_SHARED=0 \
+            USE_SHARED=1 \
             EXTRA_CFLAGS="-O3 -fPIC" \
+
     && mkdir -p /opt/dist/android/arm64-v8a \
     && cp -fv libvosk.so /opt/dist/android/arm64-v8a/libvosk.so \
     && cp -fv vosk_api.h /opt/dist/android/arm64-v8a/vosk_api.h \

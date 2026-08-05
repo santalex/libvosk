@@ -134,17 +134,19 @@ jobs:
 
               # A. 提取 Shared 动态库包 (.so / .dll / .lib / header)
               mkdir -p tmp_shared
-              find "$dir" -maxdepth 4 \( -name "*.so" -o -name "*.dll" -o -name "*.dll.a" -o -name "libvosk.lib" -o -name "vosk_api.h" \) -exec cp -f {} tmp_shared/ \; 2>/dev/null || true
-              if [ -n "$(ls -A tmp_shared 2>/dev/null)" ]; then
+              find "$dir" -maxdepth 4 \( -name "*.so" -o -name "*.dll" -o -name "*.dylib" -o -name "libvosk.lib" \) -exec cp -f {} tmp_shared/ \; 2>/dev/null || true
+              if ls tmp_shared/*.so tmp_shared/*.dll tmp_shared/*.dylib tmp_shared/libvosk.lib 1>/dev/null 2>&1; then
+                find "$dir" -maxdepth 4 -name "vosk_api.h" -exec cp -f {} tmp_shared/ \; 2>/dev/null || true
                 (cd tmp_shared && zip -r "../../release_packages/${pkg_prefix}-shared.zip" .)
               fi
               rm -rf tmp_shared
 
               # B. 提取 Static 纯静态库包 (.a / libvosk_static.lib / header)
               mkdir -p tmp_static
-              find "$dir" -maxdepth 4 \( -name "*.a" -o -name "libvosk_static.lib" -o -name "vosk_api.h" \) -exec cp -f {} tmp_static/ \; 2>/dev/null || true
+              find "$dir" -maxdepth 4 \( -name "*.a" -o -name "libvosk_static.lib" \) -exec cp -f {} tmp_static/ \; 2>/dev/null || true
               rm -f tmp_static/*.dll.a
-              if [ -n "$(ls -A tmp_static 2>/dev/null)" ]; then
+              if ls tmp_static/*.a tmp_static/libvosk_static.lib 1>/dev/null 2>&1; then
+                find "$dir" -maxdepth 4 -name "vosk_api.h" -exec cp -f {} tmp_static/ \; 2>/dev/null || true
                 (cd tmp_static && zip -r "../../release_packages/${pkg_prefix}-static.zip" .)
               fi
               rm -rf tmp_static
@@ -159,16 +161,18 @@ jobs:
               
               # A. macOS Shared 动态库包 (.dylib + header)
               mkdir -p tmp_mac_shared
-              find "$mac_dir" -maxdepth 4 \( -name "*.dylib" -o -name "vosk_api.h" \) -exec cp -f {} tmp_mac_shared/ \; 2>/dev/null || true
-              if [ -n "$(ls -A tmp_mac_shared 2>/dev/null)" ]; then
+              find "$mac_dir" -maxdepth 4 -name "*.dylib" -exec cp -f {} tmp_mac_shared/ \; 2>/dev/null || true
+              if ls tmp_mac_shared/*.dylib 1>/dev/null 2>&1; then
+                find "$mac_dir" -maxdepth 4 -name "vosk_api.h" -exec cp -f {} tmp_mac_shared/ \; 2>/dev/null || true
                 (cd tmp_mac_shared && zip -r "../../release_packages/${pkg_prefix}-shared.zip" .)
               fi
               rm -rf tmp_mac_shared
 
               # B. macOS Static 纯静态库包 (.a + header)
               mkdir -p tmp_mac_static
-              find "$mac_dir" -maxdepth 4 \( -name "*.a" -o -name "vosk_api.h" \) -exec cp -f {} tmp_mac_static/ \; 2>/dev/null || true
-              if [ -n "$(ls -A tmp_mac_static 2>/dev/null)" ]; then
+              find "$mac_dir" -maxdepth 4 -name "*.a" -exec cp -f {} tmp_mac_static/ \; 2>/dev/null || true
+              if ls tmp_mac_static/*.a 1>/dev/null 2>&1; then
+                find "$mac_dir" -maxdepth 4 -name "vosk_api.h" -exec cp -f {} tmp_mac_static/ \; 2>/dev/null || true
                 (cd tmp_mac_static && zip -r "../../release_packages/${pkg_prefix}-static.zip" .)
               fi
               rm -rf tmp_mac_static
@@ -201,7 +205,7 @@ jobs:
             mkdir -p tmp_uni_shared
             cp download_dist/vosk-macos-universal/vosk_api.h tmp_uni_shared/ 2>/dev/null || true
             cp download_dist/vosk-macos-universal/libvosk.dylib tmp_uni_shared/ 2>/dev/null || true
-            if [ -n "$(ls -A tmp_uni_shared 2>/dev/null)" ]; then
+            if ls tmp_uni_shared/*.dylib 1>/dev/null 2>&1; then
               (cd tmp_uni_shared && zip -r "../../release_packages/libvosk-${VOSK_TAG}-macos-universal-shared.zip" .)
             fi
             rm -rf tmp_uni_shared
@@ -210,7 +214,7 @@ jobs:
             mkdir -p tmp_uni_static
             cp download_dist/vosk-macos-universal/vosk_api.h tmp_uni_static/ 2>/dev/null || true
             cp download_dist/vosk-macos-universal/libvosk.a tmp_uni_static/ 2>/dev/null || true
-            if [ -n "$(ls -A tmp_uni_static 2>/dev/null)" ]; then
+            if ls tmp_uni_static/*.a 1>/dev/null 2>&1; then
               (cd tmp_uni_static && zip -r "../../release_packages/libvosk-${VOSK_TAG}-macos-universal-static.zip" .)
             fi
             rm -rf tmp_uni_static
@@ -219,7 +223,7 @@ jobs:
             mkdir -p tmp_mac_xcf
             cp download_dist/vosk-macos-universal/vosk_api.h tmp_mac_xcf/ 2>/dev/null || true
             cp -R download_dist/vosk-macos-universal/libvosk.xcframework tmp_mac_xcf/ 2>/dev/null || true
-            if [ -n "$(ls -A tmp_mac_xcf 2>/dev/null)" ]; then
+            if [ -d "tmp_mac_xcf/libvosk.xcframework" ]; then
               (cd tmp_mac_xcf && zip -r "../../release_packages/libvosk-${VOSK_TAG}-macos-xcframework.zip" .)
             fi
             rm -rf tmp_mac_xcf
@@ -232,7 +236,7 @@ jobs:
             mkdir -p tmp_ios_static
             find "$ios_dir" -name "vosk_api.h" -exec cp -f {} tmp_ios_static/ \; 2>/dev/null || true
             find "$ios_dir" -type d \( -name "iphoneos_arm64" -o -name "iphonesimulator_universal" \) -exec cp -Rf {} tmp_ios_static/ \; 2>/dev/null || true
-            if [ -n "$(ls -A tmp_ios_static 2>/dev/null)" ]; then
+            if ls tmp_ios_static/*/*.a 1>/dev/null 2>&1; then
               (cd tmp_ios_static && zip -r "../../release_packages/libvosk-${VOSK_TAG}-ios-static.zip" .)
             fi
             rm -rf tmp_ios_static
@@ -241,7 +245,7 @@ jobs:
             mkdir -p tmp_ios_xcf
             find "$ios_dir" -name "vosk_api.h" -exec cp -f {} tmp_ios_xcf/ \; 2>/dev/null || true
             find "$ios_dir" -type d -name "libvosk.xcframework" -exec cp -Rf {} tmp_ios_xcf/ \; 2>/dev/null || true
-            if [ -n "$(ls -A tmp_ios_xcf 2>/dev/null)" ]; then
+            if [ -d "tmp_ios_xcf/libvosk.xcframework" ]; then
               (cd tmp_ios_xcf && zip -r "../../release_packages/libvosk-${VOSK_TAG}-ios-xcframework.zip" .)
             fi
             rm -rf tmp_ios_xcf
@@ -254,7 +258,7 @@ jobs:
             mkdir -p tmp_tvos_static
             find "$tvos_dir" -name "vosk_api.h" -exec cp -f {} tmp_tvos_static/ \; 2>/dev/null || true
             find "$tvos_dir" -type d \( -name "appletvos_arm64" -o -name "appletvsimulator_universal" \) -exec cp -Rf {} tmp_tvos_static/ \; 2>/dev/null || true
-            if [ -n "$(ls -A tmp_tvos_static 2>/dev/null)" ]; then
+            if ls tmp_tvos_static/*/*.a 1>/dev/null 2>&1; then
               (cd tmp_tvos_static && zip -r "../../release_packages/libvosk-${VOSK_TAG}-tvos-static.zip" .)
             fi
             rm -rf tmp_tvos_static
@@ -263,38 +267,35 @@ jobs:
             mkdir -p tmp_tvos_xcf
             find "$tvos_dir" -name "vosk_api.h" -exec cp -f {} tmp_tvos_xcf/ \; 2>/dev/null || true
             find "$tvos_dir" -type d -name "libvosk.xcframework" -exec cp -Rf {} tmp_tvos_xcf/ \; 2>/dev/null || true
-            if [ -n "$(ls -A tmp_tvos_xcf 2>/dev/null)" ]; then
+            if [ -d "tmp_tvos_xcf/libvosk.xcframework" ]; then
               (cd tmp_tvos_xcf && zip -r "../../release_packages/libvosk-${VOSK_TAG}-tvos-xcframework.zip" .)
             fi
             rm -rf tmp_tvos_xcf
           fi
 
-
           # 6. Apple 全平台 (macOS + iOS + tvOS) Super XCFramework 大一统包 (重命名为 -apple-xcframework.zip)
-          if [ -d "download_dist/vosk-macos-universal" ] && [ -d "download_dist/vosk-ios-universal" ]; then
+          if [ -d "download_dist/vosk-macos-universal" ] && [ -n "$ios_dir" ]; then
             echo "Synthesizing Apple Super XCFramework..."
             mkdir -p download_dist/vosk-apple-universal
-            cp download_dist/vosk-macos-arm64/vosk_api.h download_dist/vosk-apple-universal/ 2>/dev/null || true
+            cp "$mac_header" download_dist/vosk-apple-universal/ 2>/dev/null || true
             cp download_dist/vosk-macos-universal/libvosk.dylib download_dist/vosk-apple-universal/ 2>/dev/null || true
 
-            mkdir -p tmp_headers && cp download_dist/vosk-macos-arm64/vosk_api.h tmp_headers/
+            mkdir -p tmp_headers && cp "$mac_header" tmp_headers/
             
             XCF_CMD=(xcodebuild -create-xcframework)
             if [ -f "download_dist/vosk-macos-universal/libvosk.a" ]; then
               XCF_CMD+=(-library download_dist/vosk-macos-universal/libvosk.a -headers tmp_headers)
             fi
-            if [ -f "download_dist/vosk-ios-universal/iphoneos_arm64/libvosk.a" ]; then
-              XCF_CMD+=(-library download_dist/vosk-ios-universal/iphoneos_arm64/libvosk.a -headers tmp_headers)
-            fi
-            if [ -f "download_dist/vosk-ios-universal/iphonesimulator_universal/libvosk.a" ]; then
-              XCF_CMD+=(-library download_dist/vosk-ios-universal/iphonesimulator_universal/libvosk.a -headers tmp_headers)
-            fi
-            if [ -f "download_dist/vosk-tvos-universal/appletvos_arm64/libvosk.a" ]; then
-              XCF_CMD+=(-library download_dist/vosk-tvos-universal/appletvos_arm64/libvosk.a -headers tmp_headers)
-            fi
-            if [ -f "download_dist/vosk-tvos-universal/appletvsimulator_universal/libvosk.a" ]; then
-              XCF_CMD+=(-library download_dist/vosk-tvos-universal/appletvsimulator_universal/libvosk.a -headers tmp_headers)
-            fi
+            
+            ios_arm64_a=$(find download_dist/ -path "*/iphoneos_arm64/*" -name "libvosk.a" | head -n 1)
+            ios_sim_a=$(find download_dist/ -path "*/iphonesimulator_universal/*" -name "libvosk.a" | head -n 1)
+            tvos_arm64_a=$(find download_dist/ -path "*/appletvos_arm64/*" -name "libvosk.a" | head -n 1)
+            tvos_sim_a=$(find download_dist/ -path "*/appletvsimulator_universal/*" -name "libvosk.a" | head -n 1)
+
+            if [ -n "$ios_arm64_a" ]; then XCF_CMD+=(-library "$ios_arm64_a" -headers tmp_headers); fi
+            if [ -n "$ios_sim_a" ]; then XCF_CMD+=(-library "$ios_sim_a" -headers tmp_headers); fi
+            if [ -n "$tvos_arm64_a" ]; then XCF_CMD+=(-library "$tvos_arm64_a" -headers tmp_headers); fi
+            if [ -n "$tvos_sim_a" ]; then XCF_CMD+=(-library "$tvos_sim_a" -headers tmp_headers); fi
             XCF_CMD+=(-output download_dist/vosk-apple-universal/libvosk.xcframework)
 
             "${XCF_CMD[@]}" 2>/dev/null || true
@@ -317,7 +318,7 @@ jobs:
                 continue
               fi
 
-              dylib_file=$(find "$dir" -maxdepth 2 \( -name "*.dylib" -o -name "*.so" -o -name "*.dll" \) 2>/dev/null | head -n 1)
+              dylib_file=$(find "$dir" -maxdepth 4 \( -name "*.dylib" -o -name "*.so" -o -name "*.dll" \) 2>/dev/null | head -n 1)
               
               if [ -n "$dylib_file" ]; then
                 echo "Building Single Target Python Wheel for ${target_name} ..."
@@ -342,31 +343,35 @@ jobs:
             
             # 搜集当前 OS 下的所有架构动态库放入 lib/<os>_<arch>/
             found_count=0
-            for dylib_path in $(find download_dist/vosk-${os_sys}-* \( -name "*.dylib" -o -name "*.so" -o -name "*.dll" \) 2>/dev/null); do
-              arch_sub=$(basename $(dirname "$dylib_path"))
-              mkdir -p "tmp_os_build/vosk/lib/${os_sys}_${arch_sub}"
-              cp "$dylib_path" "tmp_os_build/vosk/lib/${os_sys}_${arch_sub}/"
-              found_count=$((found_count + 1))
+            for dylib_path in $(find download_dist/ -name "*.dylib" -o -name "*.so" -o -name "*.dll" 2>/dev/null); do
+              if [[ "$dylib_path" == *"${os_sys}"* ]] || ([[ "$os_sys" == "macos" ]] && [[ "$dylib_path" == *"apple"* ]]); then
+                arch_sub=$(basename $(dirname "$dylib_path"))
+                mkdir -p "tmp_os_build/vosk/lib/${os_sys}_${arch_sub}"
+                cp -f "$dylib_path" "tmp_os_build/vosk/lib/${os_sys}_${arch_sub}/"
+                found_count=$((found_count + 1))
+              fi
             done
 
             if [ $found_count -gt 0 ]; then
-              (cd tmp_os_build && VOSK_TAG="${VOSK_TAG}" python3 setup.py bdist_wheel --plat-name="${os_sys}_universal") 2>/dev/null || true
+              plat_out="${os_sys}_universal"
+              if [ "$os_sys" = "macos" ]; then plat_out="macosx_universal"; fi
+              (cd tmp_os_build && VOSK_TAG="${VOSK_TAG}" python3 setup.py bdist_wheel --plat-name="${plat_out}") 2>/dev/null || true
               cp tmp_os_build/dist/*.whl release_packages/ 2>/dev/null || true
             fi
             rm -rf tmp_os_build
           done
 
-          # C. 第三梯度：全平台大一统 Super Universal Wheel 包 (vosk-*-py3-none-any.whl, ~45MB)
+          # C. 第三梯度：全平台大一统 Super Universal Wheel 包 (vosk-*-py3-none-any.whl, ~52MB)
           echo "Building Super Universal All-in-One Python Wheel (py3-none-any.whl) ..."
           rm -rf tmp_all_build && mkdir -p tmp_all_build/vosk/lib
           cp -R src/python/vosk/* tmp_all_build/vosk/
           cp src/python/setup.py tmp_all_build/
           
-          for dylib_path in $(find download_dist/vosk-* \( -name "*.dylib" -o -name "*.so" -o -name "*.dll" \) 2>/dev/null); do
+          for dylib_path in $(find download_dist/ -name "*.dylib" -o -name "*.so" -o -name "*.dll" 2>/dev/null); do
             target_sub=$(basename $(dirname "$dylib_path"))
             os_sub=$(basename $(dirname $(dirname "$dylib_path")) | sed "s/vosk-//")
             mkdir -p "tmp_all_build/vosk/lib/${os_sub}_${target_sub}"
-            cp "$dylib_path" "tmp_all_build/vosk/lib/${os_sub}_${target_sub}/"
+            cp -f "$dylib_path" "tmp_all_build/vosk/lib/${os_sub}_${target_sub}/"
           done
 
           (cd tmp_all_build && VOSK_TAG="${VOSK_TAG}" python3 setup.py bdist_wheel --plat-name="any") 2>/dev/null || true
