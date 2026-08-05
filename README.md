@@ -7,8 +7,11 @@
 
 This repository provides an automated, hermetic, Docker-based multi-platform build engine and binary distribution for [Vosk API](https://github.com/alphacep/vosk-api) (v0.3.50+), covering 64-bit, 32-bit, and cross-architecture targets across Desktop, Mobile, TV, and Embedded Linux ecosystems.
 
+> [!NOTE]
+> **Status Note**: Currently, only the **macOS static libraries (`libvosk-macos-*-static.zip` / `.a`)** have been fully tested and verified in production environments. Binary packages for other platforms are compiled using standard toolchains and provided as prebuilt releases.
 
 ---
+
 
 ## 🌐 Supported Target Platform Matrix
 
