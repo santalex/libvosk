@@ -266,7 +266,7 @@ package_all() {
         for dylib_path in $(find "${DIST_DIR}" -name "*.dylib" -o -name "*.so" -o -name "*.dll" 2>/dev/null); do
             target_name=$(basename $(dirname "$dylib_path"))
             os_name=$(basename $(dirname $(dirname "$dylib_path")))
-            if [ -n "$target_name" ] && [ -n "$os_name" ] && [ "$os_name" != "." ] && [ "$os_name" != "dist" ]; then
+            if [ -n "$target_name" ] && [ -n "$os_name" ] && [ "$os_name" != "." ] && [ "$os_name" != "dist" ] && [ "$target_name" != "universal" ]; then
                 plat_tag="${os_name}_${target_name}"
                 clean_plat="${plat_tag//-/_}"
                 echo "Packaging Python Wheel [${clean_plat}] -> libvosk-${VOSK_TAG//v/}-py3-none-${clean_plat}.whl ..."
