@@ -84,14 +84,15 @@ RUN cd /opt \
             HAVE_ACCELERATE=0 \
             HAVE_OPENBLAS=1 \
             HAVE_MKL=0 \
-            USE_SHARED=1 \
+            USE_SHARED=0 \
             EXTRA_CFLAGS="-O3 -fPIC" \
     && mkdir -p /opt/dist/android/arm64-v8a \
-    && cp -fv libvosk.so /opt/dist/android/arm64-v8a/libvosk.so \
     && cp -fv vosk_api.h /opt/dist/android/arm64-v8a/vosk_api.h \
     && mkdir -p /opt/build_tmp \
     && cd /opt/build_tmp \
     && cp /opt/vosk-api/src/*.o . 2>/dev/null || true \
     && for lib in /opt/kaldi/kaldi/src/*/*.a /opt/kaldi/local/lib/*.a; do $AR x "$lib"; done \
     && $AR rcs /opt/dist/android/arm64-v8a/libvosk.a *.o \
+    && $CXX -shared -Wl,-soname,libvosk.so -o /opt/dist/android/arm64-v8a/libvosk.so *.o -lm -ldl -llog \
     && rm -rf /opt/build_tmp
+
