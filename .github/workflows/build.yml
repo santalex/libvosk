@@ -17,9 +17,6 @@ on:
       - 'libvosk-v*'
       - 'v*'
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-
 jobs:
   build-vosk-matrix:
     name: Build (${{ matrix.os }}-${{ matrix.arch }})
@@ -79,7 +76,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install macOS Build Tools
         if: runner.os == 'macOS'
@@ -92,7 +89,7 @@ jobs:
           ./build.sh --os ${{ matrix.os }} --arch ${{ matrix.arch }} --vosk-tag "${VOSK_TAG}" --yes
 
       - name: Upload Target Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: vosk-${{ matrix.os }}-${{ matrix.arch }}
           path: dist/
@@ -103,7 +100,7 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -115,7 +112,7 @@ jobs:
           python3 -m pip install --upgrade pip setuptools wheel cffi
 
       - name: Download All Matrix Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: dist/
 
@@ -128,6 +125,7 @@ jobs:
         if: inputs.create_release || startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.vosk_tag || github.ref_name }}
           files: packages/*
           name: LibVosk Unofficial Multi-Platform Prebuilt Release (${{ inputs.vosk_tag || github.ref_name }})
           body: |
