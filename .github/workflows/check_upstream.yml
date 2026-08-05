@@ -1,0 +1,54 @@
+name: Auto Check Upstream Vosk API Tag
+
+on:
+  schedule:
+    # 每天北京时间早上 08:00 (即 UTC 00:00) 自动触发检查
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-upstream:
+    name: Check & Auto-Dispatch New Tag Build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Fetch Upstream Latest Tag
+        id: upstream
+        run: |
+          LATEST_TAG=$(curl -s https://api.github.com/repos/alphacep/vosk-api/releases/latest | jq -r .tag_name)
+          if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "null" ]; then
+              echo "⚠️ Unable to fetch upstream tag"
+              exit 1
+          fi
+          echo "tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+          echo "Found upstream latest tag: ${LATEST_TAG}"
+
+      - name: Check If Already Released In Current Repo
+        id: check_release
+        run: |
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.upstream.outputs.tag }})
+          if [ "$STATUS" = "404" ]; then
+            echo "need_build=true" >> $GITHUB_OUTPUT
+            echo "Tag ${{ steps.upstream.outputs.tag }} has not been released yet. Triggering build!"
+          else
+            echo "need_build=false" >> $GITHUB_OUTPUT
+            echo "Tag ${{ steps.upstream.outputs.tag }} is already released. Skipping build."
+          fi
+
+      - name: Trigger Build & Release Workflow
+        if: steps.check_release.outputs.need_build == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'build.yml',
+              ref: 'master',
+              inputs: {
+                vosk_tag: '${{ steps.upstream.outputs.tag }}',
+                create_release: true
+              }
+            });

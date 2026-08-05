@@ -84,7 +84,8 @@ jobs:
       - name: Install macOS Build Tools
         if: runner.os == 'macOS'
         run: |
-          brew install autoconf automake libtool
+          brew untap aws/tap 2>/dev/null || true
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install autoconf automake libtool
 
       - name: Build Vosk Target
         run: |
@@ -120,6 +121,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: dist/
+          merge-multiple: true
 
       - name: Run Unified Packaging Script
         run: |
