@@ -3,8 +3,11 @@
 # ==============================================================================
 FROM debian:11
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+RUN apt-get update -o Acquire::Retries=3 && \
+    apt-get install -y \
+        -o Acquire::Retries=3 \
+        -o Acquire::http::Timeout="30" \
+        --no-install-recommends \
     ca-certificates \
     g++ \
     bzip2 \
