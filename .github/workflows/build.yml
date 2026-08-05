@@ -17,6 +17,9 @@ on:
       - 'libvosk-v*'
       - 'v*'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   build-vosk-matrix:
     name: Build (${{ matrix.os }}-${{ matrix.arch }})
@@ -76,7 +79,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Install macOS Build Tools
         if: runner.os == 'macOS'
@@ -89,7 +92,7 @@ jobs:
           ./build.sh --os ${{ matrix.os }} --arch ${{ matrix.arch }} --vosk-tag "${VOSK_TAG}" --yes
 
       - name: Upload Target Artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: vosk-${{ matrix.os }}-${{ matrix.arch }}
           path: dist/
@@ -100,10 +103,10 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -112,7 +115,7 @@ jobs:
           python3 -m pip install --upgrade pip setuptools wheel cffi
 
       - name: Download All Matrix Artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: dist/
 
