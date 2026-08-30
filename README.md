@@ -15,11 +15,11 @@ This repository provides an automated, hermetic, Docker-based multi-platform bui
 
 ## 🌐 Supported Target Platform Matrix
 
-| OS / Ecosystem | Architecture (`--arch`) | Shared Package (`-shared.zip`) | Static Package (`-static.zip`) | XCFramework Package (`-xcframework.zip`) |
-| :--- | :--- | :--- | :--- | :--- |
-| **macOS** | `arm64` | `libvosk-macos-arm64-shared.zip` (`.dylib`) | `libvosk-macos-arm64-static.zip` (`.a`) | - |
-| **macOS** | `x86_64` | `libvosk-macos-x86_64-shared.zip` (`.dylib`) | `libvosk-macos-x86_64-static.zip` (`.a`) | - |
-| **macOS** | `universal` | `libvosk-macos-universal-shared.zip` | `libvosk-macos-universal-static.zip` | `libvosk-macos-xcframework.zip` |
+| OS / Ecosystem | Architecture (`--arch`) | Min Supported OS | Shared Package (`-shared.zip`) | Static Package (`-static.zip`) | XCFramework Package (`-xcframework.zip`) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **macOS** | `arm64` | macOS 11.0+ (Big Sur) | `libvosk-macos-arm64-shared.zip` (`.dylib`) | `libvosk-macos-arm64-static.zip` (`.a`) | - |
+| **macOS** | `x86_64` | macOS 11.0+ (Big Sur) | `libvosk-macos-x86_64-shared.zip` (`.dylib`) | `libvosk-macos-x86_64-static.zip` (`.a`) | - |
+| **macOS** | `universal` | macOS 11.0+ (Big Sur) | `libvosk-macos-universal-shared.zip` | `libvosk-macos-universal-static.zip` | `libvosk-macos-xcframework.zip` |
 | **iOS** | `universal` | - | `libvosk-ios-static.zip` (`.a`) | `libvosk-ios-xcframework.zip` |
 | **tvOS** | `universal` | - | `libvosk-tvos-static.zip` (`.a`) | `libvosk-tvos-xcframework.zip` |
 | **Apple** | `universal` (macOS+iOS+tvOS) | - | - | `libvosk-apple-xcframework.zip` (Super `XCFramework`) |

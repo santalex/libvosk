@@ -19,6 +19,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  MACOSX_DEPLOYMENT_TARGET: '11.0'
 
 jobs:
   build-vosk-matrix:

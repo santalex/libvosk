@@ -17,9 +17,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMMAND="${1:-macos}"
 SPECIFIED_ARCH="$2"
 
-DEPLOYMENT_TARGET_MACOS="10.15"
+DEPLOYMENT_TARGET_MACOS="11.0"
 DEPLOYMENT_TARGET_IOS="13.0"
 DEPLOYMENT_TARGET_TVOS="13.0"
+export MACOSX_DEPLOYMENT_TARGET="${DEPLOYMENT_TARGET_MACOS}"
 
 MACOS_SDK_PATH=$(xcrun --sdk macosx --show-sdk-path)
 IPHONEOS_SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path 2>/dev/null || true)
@@ -42,8 +43,8 @@ show_help() {
     echo "  help | -h  - 显示本帮助信息"
     echo ""
     echo "支持架构 (arch，仅限 macos 平台):"
-    echo "  arm64      - 针对 Apple Silicon (M1/M2/M3/M4) 架构"
-    echo "  x86_64     - 针对 Intel 64 位 CPU 架构"
+    echo "  arm64      - 针对 Apple Silicon (M1/M2/M3/M4) 架构 (macOS 11.0+)"
+    echo "  x86_64     - 针对 Intel 64 位 CPU 架构 (macOS 11.0+)"
     echo "  universal  - 编译 x86_64 与 arm64 并合成 Universal 胖二进制"
     echo "  (默认)     - 自动检测当前宿主 CPU 架构 (当前检测为: $(uname -m))"
     echo ""
@@ -198,11 +199,11 @@ prepare_headers() {
 # ------------------------------------------------------------------------------
 build_macos_shared() {
     local TARGET_ARCH=$1
-    local ARCH_FLAGS="-arch ${TARGET_ARCH}"
+    local ARCH_FLAGS="-arch ${TARGET_ARCH} -mmacosx-version-min=${DEPLOYMENT_TARGET_MACOS} -isysroot ${MACOS_SDK_PATH}"
     local HOST_FLAGS="--host=${TARGET_ARCH}-apple-darwin"
     local KALDI_ROOT="${SCRIPT_DIR}/kaldi"
 
-    echo "--> 正在编译 macOS 动态库 (.dylib) [${TARGET_ARCH}]..."
+    echo "--> 正在编译 macOS 动态库 (.dylib) [${TARGET_ARCH}] (minOS: ${DEPLOYMENT_TARGET_MACOS})..."
 
     compile_openfst "${ARCH_FLAGS}" "${HOST_FLAGS}"
     compile_kaldi "${ARCH_FLAGS}" 1
@@ -231,11 +232,11 @@ build_macos_shared() {
 # ------------------------------------------------------------------------------
 build_macos_static() {
     local TARGET_ARCH=$1
-    local ARCH_FLAGS="-arch ${TARGET_ARCH}"
+    local ARCH_FLAGS="-arch ${TARGET_ARCH} -mmacosx-version-min=${DEPLOYMENT_TARGET_MACOS} -isysroot ${MACOS_SDK_PATH}"
     local HOST_FLAGS="--host=${TARGET_ARCH}-apple-darwin"
     local KALDI_ROOT="${SCRIPT_DIR}/kaldi"
 
-    echo "--> 正在编译 macOS 静态库 (.a) [${TARGET_ARCH}]..."
+    echo "--> 正在编译 macOS 静态库 (.a) [${TARGET_ARCH}] (minOS: ${DEPLOYMENT_TARGET_MACOS})..."
 
     compile_openfst "${ARCH_FLAGS}" "${HOST_FLAGS}"
     compile_kaldi "${ARCH_FLAGS}" 0
