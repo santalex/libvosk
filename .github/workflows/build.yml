@@ -44,16 +44,16 @@ jobs:
           - os: tvos
             arch: universal
             runner: macos-14
-          # Windows
+          # Windows (MSVC Native)
           - os: windows
             arch: x86_64
-            runner: ubuntu-latest
+            runner: windows-2022
           - os: windows
             arch: arm64
-            runner: ubuntu-latest
+            runner: windows-2022
           - os: windows
             arch: x86
-            runner: ubuntu-latest
+            runner: windows-2022
           # Linux
           - os: linux
             arch: x86_64
@@ -88,10 +88,18 @@ jobs:
           brew untap aws/tap 2>/dev/null || true
           HOMEBREW_NO_AUTO_UPDATE=1 brew install autoconf automake libtool
 
-      - name: Build Vosk Target
+      - name: Build Vosk Target (macOS / Linux / Android)
+        if: runner.os != 'Windows'
         run: |
           VOSK_TAG="${{ inputs.vosk_tag || 'v0.3.50' }}"
           ./build.sh --os ${{ matrix.os }} --arch ${{ matrix.arch }} --vosk-tag "${VOSK_TAG}" --yes
+
+      - name: Build Vosk Target (Windows MSVC Native)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $VOSK_TAG = "${{ inputs.vosk_tag || 'v0.3.50' }}"
+          .\src\windows\build.ps1 -Arch "${{ matrix.arch }}" -VoskTag "$VOSK_TAG"
 
       - name: Upload Target Artifact
         uses: actions/upload-artifact@v7

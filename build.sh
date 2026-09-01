@@ -450,11 +450,11 @@ if [ "${TARGET_OS}" = "macos" ] || [ "${TARGET_OS}" = "ios" ] || [ "${TARGET_OS}
     fi
 fi
 
-# 2. Windows 目标处理
+# 2. Windows 目标处理 (原生 MSVC / PowerShell 构建)
 if [ "${TARGET_OS}" = "windows" ] || [ "${TARGET_OS}" = "all" ]; then
-    if [ "${TARGET_ARCH}" = "x86_64" ] || [ "${TARGET_ARCH}" = "all" ]; then build_target_docker "windows" "x86_64"; fi
-    if [ "${TARGET_ARCH}" = "arm64" ] || [ "${TARGET_ARCH}" = "aarch64" ] || [ "${TARGET_ARCH}" = "all" ]; then build_target_docker "windows" "arm64"; fi
-    if [ "${TARGET_ARCH}" = "x86" ] || [ "${TARGET_ARCH}" = "i686" ] || [ "${TARGET_ARCH}" = "all" ]; then build_target_docker "windows" "x86"; fi
+    if [ "$(uname)" = "Darwin" ] || [ "$(expr substr $(uname -s) 1 5)" = "Linux" ]; then
+        echo "💡 提示: Windows 目标已升级为原生 MSVC 纯净编译架构 (GitHub Actions 中在 windows-2022 宿主上运行 src/windows/build.ps1)。"
+    fi
 fi
 
 # 3. Linux 目标处理
