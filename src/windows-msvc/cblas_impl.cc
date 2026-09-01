@@ -420,6 +420,111 @@ void cblas_dtrsm(enum CBLAS_ORDER order, enum CBLAS_SIDE Side, enum CBLAS_UPLO U
         dtrsm_(&side_r, &uplo_r, &trans, &diag, &n, &m, &a, (doublereal*)A, &lda_, (doublereal*)B, &ldb_);
     }
 }
+void cblas_ssymm(const enum CBLAS_ORDER order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const int M, const int N,
+                 const float alpha, const float *A, const int lda,
+                 const float *B, const int ldb, const float beta,
+                 float *C, const int ldc) {
+    char side = get_side(Side), uplo = get_uplo(Uplo);
+    integer m = M, n = N, lda_ = lda, ldb_ = ldb, ldc_ = ldc;
+    real a = alpha, b = beta;
+    extern int ssymm_(char *, char *, integer *, integer *, real *, real *, integer *, real *, integer *, real *, real *, integer *);
+    if (order == CblasColMajor) {
+        ssymm_(&side, &uplo, &m, &n, &a, (real*)A, &lda_, (real*)B, &ldb_, &b, (real*)C, &ldc_);
+    } else {
+        char side_r = (side == 'L') ? 'R' : 'L';
+        char uplo_r = (uplo == 'U') ? 'L' : 'U';
+        ssymm_(&side_r, &uplo_r, &n, &m, &a, (real*)A, &lda_, (real*)B, &ldb_, &b, (real*)C, &ldc_);
+    }
+}
+
+void cblas_dsymm(const enum CBLAS_ORDER order, const enum CBLAS_SIDE Side,
+                 const enum CBLAS_UPLO Uplo, const int M, const int N,
+                 const double alpha, const double *A, const int lda,
+                 const double *B, const int ldb, const double beta,
+                 double *C, const int ldc) {
+    char side = get_side(Side), uplo = get_uplo(Uplo);
+    integer m = M, n = N, lda_ = lda, ldb_ = ldb, ldc_ = ldc;
+    doublereal a = alpha, b = beta;
+    extern int dsymm_(char *, char *, integer *, integer *, doublereal *, doublereal *, integer *, doublereal *, integer *, doublereal *, doublereal *, integer *);
+    if (order == CblasColMajor) {
+        dsymm_(&side, &uplo, &m, &n, &a, (doublereal*)A, &lda_, (doublereal*)B, &ldb_, &b, (doublereal*)C, &ldc_);
+    } else {
+        char side_r = (side == 'L') ? 'R' : 'L';
+        char uplo_r = (uplo == 'U') ? 'L' : 'U';
+        dsymm_(&side_r, &uplo_r, &n, &m, &a, (doublereal*)A, &lda_, (doublereal*)B, &ldb_, &b, (doublereal*)C, &ldc_);
+    }
+}
+
+void cblas_ssyrk(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                 const float alpha, const float *A, const int lda,
+                 const float beta, float *C, const int ldc) {
+    char uplo = get_uplo(Uplo), trans = get_trans(Trans);
+    integer n = N, k = K, lda_ = lda, ldc_ = ldc;
+    real a = alpha, b = beta;
+    extern int ssyrk_(char *, char *, integer *, integer *, real *, real *, integer *, real *, real *, integer *);
+    if (order == CblasColMajor) {
+        ssyrk_(&uplo, &trans, &n, &k, &a, (real*)A, &lda_, &b, (real*)C, &ldc_);
+    } else {
+        char uplo_r = (uplo == 'U') ? 'L' : 'U';
+        char trans_r = (trans == 'N') ? 'T' : 'N';
+        ssyrk_(&uplo_r, &trans_r, &n, &k, &a, (real*)A, &lda_, &b, (real*)C, &ldc_);
+    }
+}
+
+void cblas_dsyrk(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                 const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                 const double alpha, const double *A, const int lda,
+                 const double beta, double *C, const int ldc) {
+    char uplo = get_uplo(Uplo), trans = get_trans(Trans);
+    integer n = N, k = K, lda_ = lda, ldc_ = ldc;
+    doublereal a = alpha, b = beta;
+    extern int dsyrk_(char *, char *, integer *, integer *, doublereal *, doublereal *, integer *, doublereal *, doublereal *, integer *);
+    if (order == CblasColMajor) {
+        dsyrk_(&uplo, &trans, &n, &k, &a, (doublereal*)A, &lda_, &b, (doublereal*)C, &ldc_);
+    } else {
+        char uplo_r = (uplo == 'U') ? 'L' : 'U';
+        char trans_r = (trans == 'N') ? 'T' : 'N';
+        dsyrk_(&uplo_r, &trans_r, &n, &k, &a, (doublereal*)A, &lda_, &b, (doublereal*)C, &ldc_);
+    }
+}
+
+void cblas_ssyr2k(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                  const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                  const float alpha, const float *A, const int lda,
+                  const float *B, const int ldb, const float beta,
+                  float *C, const int ldc) {
+    char uplo = get_uplo(Uplo), trans = get_trans(Trans);
+    integer n = N, k = K, lda_ = lda, ldb_ = ldb, ldc_ = ldc;
+    real a = alpha, b = beta;
+    extern int ssyr2k_(char *, char *, integer *, integer *, real *, real *, integer *, real *, integer *, real *, real *, integer *);
+    if (order == CblasColMajor) {
+        ssyr2k_(&uplo, &trans, &n, &k, &a, (real*)A, &lda_, (real*)B, &ldb_, &b, (real*)C, &ldc_);
+    } else {
+        char uplo_r = (uplo == 'U') ? 'L' : 'U';
+        char trans_r = (trans == 'N') ? 'T' : 'N';
+        ssyr2k_(&uplo_r, &trans_r, &n, &k, &a, (real*)A, &lda_, (real*)B, &ldb_, &b, (real*)C, &ldc_);
+    }
+}
+
+void cblas_dsyr2k(const enum CBLAS_ORDER order, const enum CBLAS_UPLO Uplo,
+                  const enum CBLAS_TRANSPOSE Trans, const int N, const int K,
+                  const double alpha, const double *A, const int lda,
+                  const double *B, const int ldb, const double beta,
+                  double *C, const int ldc) {
+    char uplo = get_uplo(Uplo), trans = get_trans(Trans);
+    integer n = N, k = K, lda_ = lda, ldb_ = ldb, ldc_ = ldc;
+    doublereal a = alpha, b = beta;
+    extern int dsyr2k_(char *, char *, integer *, integer *, doublereal *, doublereal *, integer *, doublereal *, integer *, doublereal *, doublereal *, integer *);
+    if (order == CblasColMajor) {
+        dsyr2k_(&uplo, &trans, &n, &k, &a, (doublereal*)A, &lda_, (doublereal*)B, &ldb_, &b, (doublereal*)C, &ldc_);
+    } else {
+        char uplo_r = (uplo == 'U') ? 'L' : 'U';
+        char trans_r = (trans == 'N') ? 'T' : 'N';
+        dsyr2k_(&uplo_r, &trans_r, &n, &k, &a, (doublereal*)A, &lda_, (doublereal*)B, &ldb_, &b, (doublereal*)C, &ldc_);
+    }
+}
 
 #ifdef __cplusplus
 }
