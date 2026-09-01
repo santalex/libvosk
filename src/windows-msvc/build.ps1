@@ -153,6 +153,16 @@ function Prepare-Dependencies {
         $tagParam = if ($VoskTag -and $VoskTag -ne "master") { "-b", "$VoskTag" } else { @() }
         git clone @tagParam --single-branch --depth=1 https://github.com/alphacep/vosk-api $voskDir
     }
+
+    # D. CLAPACK (Vosk Fork pure C)
+    $clapackDir = Join-Path $depsDir "clapack"
+    if (-not (Test-Path (Join-Path $clapackDir "SRC"))) {
+        Write-Host "--> Cloning CLAPACK repository (alphacep/clapack v3.2.1)..." -ForegroundColor Yellow
+        if (Test-Path $clapackDir) {
+            Remove-Item -Recurse -Force $clapackDir -ErrorAction SilentlyContinue
+        }
+        git clone -b v3.2.1 --single-branch --depth=1 https://github.com/alphacep/clapack $clapackDir
+    }
 }
 
 # ------------------------------------------------------------------------------
@@ -171,68 +181,42 @@ function Build-Target-Arch([string]$targetArch) {
     New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 
     $DepsDir = Join-Path $ScriptDir "deps"
-    $OpenBLASDir = Join-Path $BuildWorkDir "openblas"
+    $ClapackDir = Join-Path $DepsDir "clapack"
     $OpenFSTDir = Join-Path $DepsDir "openfst"
     $KaldiDir = Join-Path $DepsDir "kaldi"
     $VoskApiDir = Join-Path $DepsDir "vosk-api"
 
     # --------------------------------------------------------------------------
-    # 3.1 Setup OpenBLAS MSVC binaries
+    # 3.1 Build CLAPACK with MSVC & CMake (100% pure C, zero Fortran)
     # --------------------------------------------------------------------------
-    $blasLib = Join-Path $OpenBLASDir "lib\libopenblas.lib"
-    if (-not (Test-Path $blasLib)) {
-        Write-Host "--> Downloading OpenBLAS binaries for $targetArch..." -ForegroundColor Yellow
-        New-Item -ItemType Directory -Path $OpenBLASDir -Force | Out-Null
-        
-        $blasZip = Join-Path $BuildWorkDir "openblas.zip"
-        $blasUrl = "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.28/OpenBLAS-0.3.28-x64.zip"
-        if ($targetArch -eq "x86") {
-            $blasUrl = "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.28/OpenBLAS-0.3.28-x86.zip"
-        }
-        
-        Invoke-WebRequest -Uri $blasUrl -OutFile $blasZip -UseBasicParsing
-        Expand-Archive -Path $blasZip -DestinationPath $OpenBLASDir -Force
-        Remove-Item -Force $blasZip
+    $clapackBuildDir = Join-Path $BuildWorkDir "clapack_build"
+    $lapackLib = Join-Path $clapackBuildDir "SRC\Release\lapack.lib"
+    $blasLib = Join-Path $clapackBuildDir "BLAS\SRC\Release\blas.lib"
 
-        # Disable Fortran string length extensions so Kaldi standard C LAPACK calls match cleanly
-        $lapackHeader = Join-Path $OpenBLASDir "include\lapack.h"
-        if (Test-Path $lapackHeader) {
-            $content = Get-Content $lapackHeader -Raw
-            $content = $content.Replace("#define LAPACK_FORTRAN_STRLEN_END", "/* #define LAPACK_FORTRAN_STRLEN_END */")
-            Set-Content -Path $lapackHeader -Value $content -NoNewline
+    if (-not (Test-Path $lapackLib) -or -not (Test-Path $blasLib)) {
+        Write-Host "--> Compiling CLAPACK with MSVC for $targetArch..." -ForegroundColor Yellow
+        New-Item -ItemType Directory -Path $clapackBuildDir -Force | Out-Null
+        
+        $cmakeArch = if ($targetArch -eq "x86_64") { "x64" } elseif ($targetArch -eq "arm64") { "ARM64" } else { "Win32" }
+        
+        & cmake.exe -S $ClapackDir -B $clapackBuildDir -A $cmakeArch -DCMAKE_BUILD_TYPE=Release
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "CLAPACK CMake configure failed with exit code $LASTEXITCODE"
+            exit 1
         }
-
-        # Setup OpenBLAS static library for self-contained embedding
-        $staticBlas = Join-Path $OpenBLASDir "lib\libopenblas.a"
-        if (-not (Test-Path $staticBlas)) {
-            $staticBlas = (Get-ChildItem -Path $OpenBLASDir -Recurse -Filter "libopenblas.a" | Select-Object -First 1).FullName
-        }
-        if ($staticBlas -and (Test-Path $staticBlas)) {
-            Copy-Item -Path $staticBlas -Destination $blasLib -Force
-            Write-Host "--> Using static OpenBLAS archive for self-contained MSVC embedding: $blasLib" -ForegroundColor Green
-        } else {
-            # Fallback to generating import library if static archive is not present
-            $dllFile = Join-Path $OpenBLASDir "bin\libopenblas.dll"
-            if (-not (Test-Path $dllFile)) {
-                $dllFile = (Get-ChildItem -Path $OpenBLASDir -Recurse -Filter "*.dll" | Select-Object -First 1).FullName
-            }
-            if (Test-Path $dllFile) {
-                Write-Host "--> Generating MSVC import library from $dllFile..." -ForegroundColor Yellow
-                $exportsText = & dumpbin.exe /exports $dllFile
-                $defLines = @("LIBRARY $([System.IO.Path]::GetFileName($dllFile))", "EXPORTS")
-                foreach ($line in $exportsText) {
-                    if ($line -match '^\s+\d+\s+[0-9A-Fa-f]+\s+[0-9A-Fa-f]+\s+([a-zA-Z0-9_]+)') {
-                        $defLines += "    $($Matches[1])"
-                    }
-                }
-                $defPath = Join-Path $libDir "libopenblas.def"
-                [System.IO.File]::WriteAllLines($defPath, $defLines)
-                $machineArg = if ($targetArch -eq "x86_64") { "/MACHINE:X64" } elseif ($targetArch -eq "arm64") { "/MACHINE:ARM64" } else { "/MACHINE:X86" }
-                & lib.exe "/DEF:$defPath" "/OUT:$blasLib" $machineArg
-                Write-Host "--> Created MSVC import library: $blasLib" -ForegroundColor Green
-            }
+        
+        & cmake.exe --build $clapackBuildDir --config Release --target f2c blas lapack -j $env:NUMBER_OF_PROCESSORS
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "CLAPACK CMake build failed with exit code $LASTEXITCODE"
+            exit 1
         }
     }
+
+    $f2cLibObj = (Get-ChildItem -Path "$clapackBuildDir\F2CLIBS" -Recurse -Filter "*f2c*.lib" | Select-Object -First 1).FullName
+    $blasLibObj = (Get-ChildItem -Path "$clapackBuildDir\BLAS" -Recurse -Filter "*blas*.lib" | Select-Object -First 1).FullName
+    $lapackLibObj = (Get-ChildItem -Path "$clapackBuildDir\SRC" -Recurse -Filter "*lapack*.lib" | Select-Object -First 1).FullName
+    $mathLibs = @($f2cLibObj, $blasLibObj, $lapackLibObj)
+    Write-Host "--> CLAPACK MSVC native libraries ready: $mathLibs" -ForegroundColor Green
 
     # --------------------------------------------------------------------------
     # 3.2 Build OpenFST with MSVC cl.exe
@@ -328,20 +312,20 @@ function Build-Target-Arch([string]$targetArch) {
         "/DNOMINMAX",
         "/DWIN32_LEAN_AND_MEAN",
         "/D_CRT_SECURE_NO_WARNINGS",
-        "/DHAVE_OPENBLAS=1",
+        "/DHAVE_CLAPACK=1",
         "/DHAVE_CUDA=0",
         "/DKALDI_DOUBLEPRECISION=0",
         "/DFST_NO_DYNAMIC_LINKING=1",
         "/D_USE_MATH_DEFINES",
         "/Dssize_t=intptr_t",
-        "/Dlapack_complex_float=std::complex<float>",
-        "/Dlapack_complex_double=std::complex<double>",
-        "/DLAPACK_COMPLEX_CUSTOM=1",
         "/D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS",
         "/FI$compatHeader",
         "/I$KaldiDir\src",
         "/I$fstInclude",
-        "/I$OpenBLASDir\include",
+        "/I$ClapackDir\INCLUDE",
+        "/I$ClapackDir\SRC",
+        "/I$ClapackDir\BLAS\SRC",
+        "/I$ClapackDir\F2CLIBS\libf2c",
         "/I$VoskApiDir\src"
     )
 
@@ -419,7 +403,6 @@ function Build-Target-Arch([string]$targetArch) {
     # --------------------------------------------------------------------------
     $allObjs = Get-ChildItem -Path $kaldiObjDir -Recurse -Filter "*.obj" | ForEach-Object { $_.FullName }
     $fstLibs = @($fstLibOut)
-    $blasLibs = Get-ChildItem -Path "$OpenBLASDir\lib" -Filter "*.lib" | ForEach-Object { $_.FullName }
 
     if ($LinkType -eq "all" -or $LinkType -eq "static") {
         Write-Host "--> Packaging static library (libvosk.lib)..." -ForegroundColor Green
@@ -428,7 +411,7 @@ function Build-Target-Arch([string]$targetArch) {
         $staticOutAlt = Join-Path $OutDir "libvosk_static.lib"
         
         $rspFile = Join-Path $BuildWorkDir "static_lib.rsp"
-        $rspLines = @("/NOLOGO", "/OUT:$staticOut") + $allObjs + $fstLibs + $blasLibs
+        $rspLines = @("/NOLOGO", "/OUT:$staticOut") + $allObjs + $fstLibs + $mathLibs
         [System.IO.File]::WriteAllLines($rspFile, $rspLines)
 
         $rspArg = "@$rspFile"
@@ -462,7 +445,7 @@ function Build-Target-Arch([string]$targetArch) {
             "ws2_32.lib",
             "advapi32.lib",
             "userenv.lib"
-        ) + $allObjs + $fstLibs + $blasLibs
+        ) + $allObjs + $fstLibs + $mathLibs
         
         [System.IO.File]::WriteAllLines($dllRspFile, $dllRspLines)
 
@@ -471,13 +454,6 @@ function Build-Target-Arch([string]$targetArch) {
         if ($LASTEXITCODE -ne 0) {
             Write-Error "Dynamic library link failed with exit code $LASTEXITCODE"
             exit 1
-        }
-
-        # Only copy runtime DLLs if static OpenBLAS is not available
-        if (-not (Test-Path "$OpenBLASDir\lib\libopenblas.a")) {
-            Get-ChildItem -Path "$OpenBLASDir\bin" -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
-                Copy-Item -Path $_.FullName -Destination $OutDir -Force
-            }
         }
 
         $dllSizeMB = [Math]::Round((Get-Item $dllOut).Length / 1MB, 2)
