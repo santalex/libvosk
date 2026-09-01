@@ -212,6 +212,8 @@ function Build-Target-Arch([string]$targetArch) {
         "/GL",
         "/EHsc",
         "/MD",
+        "/DNOMINMAX",
+        "/DWIN32_LEAN_AND_MEAN",
         "/D_CRT_SECURE_NO_WARNINGS",
         "/DFST_NO_DYNAMIC_LINKING=1",
         "/D_USE_MATH_DEFINES",
@@ -223,6 +225,10 @@ function Build-Target-Arch([string]$targetArch) {
     Push-Location $fstObjDir
     try {
         & cl.exe $fstClArgs $fstCcFiles
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "OpenFST cl.exe compilation failed with exit code $LASTEXITCODE"
+            exit 1
+        }
     } finally {
         Pop-Location
     }
@@ -292,6 +298,8 @@ function Build-Target-Arch([string]$targetArch) {
         "/GL",
         "/EHsc",
         "/MD",
+        "/DNOMINMAX",
+        "/DWIN32_LEAN_AND_MEAN",
         "/D_CRT_SECURE_NO_WARNINGS",
         "/DHAVE_OPENBLAS=1",
         "/DHAVE_CUDA=0",
@@ -318,6 +326,10 @@ function Build-Target-Arch([string]$targetArch) {
         Push-Location $kaldiObjDir
         try {
             & cl.exe $currentClArgs
+            if ($LASTEXITCODE -ne 0) {
+                Write-Error "Kaldi batch compilation failed with exit code $LASTEXITCODE"
+                exit 1
+            }
         } finally {
             Pop-Location
         }
