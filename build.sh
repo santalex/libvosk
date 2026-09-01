@@ -118,7 +118,11 @@ package_all() {
         arch_name=$(echo "$rel_path" | cut -d'/' -f2)
         
         if [ -n "$os_name" ] && [ -n "$arch_name" ]; then
-            pkg_prefix="libvosk-${VOSK_TAG}-${os_name}-${arch_name}"
+            if [ "$os_name" = "windows" ]; then
+                pkg_prefix="libvosk-${VOSK_TAG}-windows-msvc-${arch_name}"
+            else
+                pkg_prefix="libvosk-${VOSK_TAG}-${os_name}-${arch_name}"
+            fi
             echo "Packaging Zip [${os_name}-${arch_name}] -> ${pkg_prefix} ..."
 
             # A. Shared 动态库包 (.so / .dll / .dylib / libvosk.lib + header)
@@ -267,7 +271,11 @@ package_all() {
             target_name=$(basename $(dirname "$dylib_path"))
             os_name=$(basename $(dirname $(dirname "$dylib_path")))
             if [ -n "$target_name" ] && [ -n "$os_name" ] && [ "$os_name" != "." ] && [ "$os_name" != "dist" ] && [ "$target_name" != "universal" ]; then
-                plat_tag="${os_name}_${target_name}"
+                if [ "$os_name" = "windows" ]; then
+                    plat_tag="windows_msvc_${target_name}"
+                else
+                    plat_tag="${os_name}_${target_name}"
+                fi
                 clean_plat="${plat_tag//-/_}"
                 echo "Packaging Python Wheel [${clean_plat}] -> libvosk-${VOSK_TAG//v/}-py3-none-${clean_plat}.whl ..."
                 rm -rf tmp_py_build && mkdir -p tmp_py_build/vosk
@@ -287,6 +295,7 @@ package_all() {
         for os_sys in macos windows linux android; do
             plat_out="${os_sys}_universal"
             if [ "$os_sys" = "macos" ]; then plat_out="macosx_universal"; fi
+            if [ "$os_sys" = "windows" ]; then plat_out="windows_msvc_universal"; fi
             
             rm -rf tmp_os_build && mkdir -p tmp_os_build/vosk/lib
             cp -R src/python/vosk/* tmp_os_build/vosk/
