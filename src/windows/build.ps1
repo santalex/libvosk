@@ -1,11 +1,11 @@
 # ==============================================================================
-# build.ps1 - Vosk API Windows (MSVC Native) 工业级自动编译与瘦身打包主引擎
+# build.ps1 - Vosk API Windows (MSVC Native) Build & Slimming Engine
 #
-# 支持参数:
-#   -Arch <x86_64|arm64|x86|all>       (默认: x86_64)
-#   -LinkType <all|static|shared>      (默认: all)
-#   -VoskTag <v0.3.50|master|...>      (默认: v0.3.50)
-#   -OnlyPackage                       直接对现有 dist/ 目录打包
+# Arguments:
+#   -Arch <x86_64|arm64|x86|all>       (Default: x86_64)
+#   -LinkType <all|static|shared>      (Default: all)
+#   -VoskTag <v0.3.50|master|...>      (Default: v0.3.50)
+#   -OnlyPackage                       Package existing dist directory
 # ==============================================================================
 
 [CmdletBinding()]
@@ -30,26 +30,31 @@ $RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
 Set-Location $ScriptDir
 
 Write-Host "==============================================================================" -ForegroundColor Cyan
-Write-Host "  Vosk API Windows (MSVC) 原生构建引擎" -ForegroundColor Cyan
-Write-Host "  目标架构 (Arch)   : $Arch" -ForegroundColor Cyan
-Write-Host "  链接形式 (Link)   : $LinkType" -ForegroundColor Cyan
-Write-Host "  Vosk 版本 (Tag)   : $VoskTag" -ForegroundColor Cyan
+Write-Host "  Vosk API Windows (MSVC) Native Build Engine" -ForegroundColor Cyan
+Write-Host "  Target Arch : $Arch" -ForegroundColor Cyan
+Write-Host "  Link Type   : $LinkType" -ForegroundColor Cyan
+Write-Host "  Vosk Tag    : $VoskTag" -ForegroundColor Cyan
 Write-Host "==============================================================================" -ForegroundColor Cyan
 
 # ------------------------------------------------------------------------------
-# 1. 激活 MSVC 编译环境 (vcvarsall.bat)
+# 1. Initialize MSVC Environment (vcvarsall.bat)
 # ------------------------------------------------------------------------------
 function Initialize-MSVC-Environment([string]$targetArch) {
-    Write-Host "--> 正在初始化 Visual Studio 2022 MSVC 编译环境 ($targetArch)..." -ForegroundColor Yellow
+    Write-Host "--> Initializing MSVC environment for $targetArch..." -ForegroundColor Yellow
 
     $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
     if (-not (Test-Path $vswhere)) {
         $vswhere = "vswhere.exe"
     }
 
-    $vsInstallPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    $vsInstallPath = ""
+    try {
+        $vsInstallPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    } catch {
+        $vsInstallPath = ""
+    }
+
     if (-not $vsInstallPath -or -not (Test-Path $vsInstallPath)) {
-        # 兼容 GitHub Actions 默认路径
         $candidates = @(
             "C:\Program Files\Microsoft Visual Studio\2022\Enterprise",
             "C:\Program Files\Microsoft Visual Studio\2022\Community",
@@ -67,12 +72,12 @@ function Initialize-MSVC-Environment([string]$targetArch) {
     }
 
     if (-not $vsInstallPath) {
-        throw "❌ 未找到 Visual Studio MSVC 安装路径！请确保已安装 C++ 构建工具。"
+        throw "Visual Studio MSVC installation path not found!"
     }
 
     $vcvars = Join-Path $vsInstallPath "VC\Auxiliary\Build\vcvarsall.bat"
     if (-not (Test-Path $vcvars)) {
-        throw "❌ 未找到 vcvarsall.bat: $vcvars"
+        throw "vcvarsall.bat not found at: $vcvars"
     }
 
     $vcArch = switch ($targetArch) {
@@ -82,7 +87,6 @@ function Initialize-MSVC-Environment([string]$targetArch) {
         default  { "x64" }
     }
 
-    # 导出 MSVC 环境变量到当前 PowerShell 会话
     $tempFile = [System.IO.Path]::GetTempFileName()
     cmd.exe /c "`"$vcvars`" $vcArch && set > `"$tempFile`""
     Get-Content $tempFile | ForEach-Object {
@@ -92,11 +96,11 @@ function Initialize-MSVC-Environment([string]$targetArch) {
     }
     Remove-Item -Force $tempFile
 
-    Write-Host "✔ MSVC 环境已成功加载 (CL: $(cl.exe 2>&1 | Select-Object -First 1))" -ForegroundColor Green
+    Write-Host "MSVC environment successfully loaded." -ForegroundColor Green
 }
 
 # ------------------------------------------------------------------------------
-# 2. 源码与依赖准备
+# 2. Prepare Source Code & Dependencies
 # ------------------------------------------------------------------------------
 function Prepare-Dependencies {
     $DepsDir = Join-Path $ScriptDir "deps"
@@ -106,34 +110,34 @@ function Prepare-Dependencies {
 
     Set-Location $DepsDir
 
-    # A. OpenFST (MSVC 移植版)
+    # A. OpenFST (MSVC Port)
     if (-not (Test-Path "openfst")) {
-        Write-Host "--> 正在克隆 OpenFST 源码..." -ForegroundColor Yellow
+        Write-Host "--> Cloning OpenFST repository..." -ForegroundColor Yellow
         git clone --depth=1 https://github.com/alphacep/openfst openfst
     }
 
-    # B. Kaldi (Vosk 适配版)
+    # B. Kaldi (Vosk Fork)
     if (-not (Test-Path "kaldi")) {
-        Write-Host "--> 正在克隆 Kaldi 源码..." -ForegroundColor Yellow
+        Write-Host "--> Cloning Kaldi repository..." -ForegroundColor Yellow
         git clone -b vosk-android --single-branch --depth=1 https://github.com/alphacep/kaldi kaldi
     }
 
-    # C. Vosk API 源码
+    # C. Vosk API
     if (-not (Test-Path "vosk-api")) {
-        Write-Host "--> 正在克隆 Vosk API 源码 (Tag: $VoskTag)..." -ForegroundColor Yellow
-        $tagParam = if ($VoskTag -and $VoskTag -ne "master") { "-b $VoskTag" } else { "" }
-        git clone $tagParam --single-branch --depth=1 https://github.com/alphacep/vosk-api vosk-api
+        Write-Host "--> Cloning Vosk API repository (Tag: $VoskTag)..." -ForegroundColor Yellow
+        $tagParam = if ($VoskTag -and $VoskTag -ne "master") { "-b", "$VoskTag" } else { @() }
+        git clone @tagParam --single-branch --depth=1 https://github.com/alphacep/vosk-api vosk-api
     }
 
     Set-Location $ScriptDir
 }
 
 # ------------------------------------------------------------------------------
-# 3. 编译单架构目标 (x86_64 / arm64 / x86)
+# 3. Build Single Target Architecture (x86_64 / arm64 / x86)
 # ------------------------------------------------------------------------------
 function Build-Target-Arch([string]$targetArch) {
     Write-Host "==============================================================================" -ForegroundColor Cyan
-    Write-Host "  [MSVC 构建] 开始编译 Windows [$targetArch] ..." -ForegroundColor Cyan
+    Write-Host "  Building Windows [$targetArch] ..." -ForegroundColor Cyan
     Write-Host "==============================================================================" -ForegroundColor Cyan
 
     Initialize-MSVC-Environment $targetArch
@@ -150,10 +154,11 @@ function Build-Target-Arch([string]$targetArch) {
     $VoskApiDir = Join-Path $DepsDir "vosk-api"
 
     # --------------------------------------------------------------------------
-    # 3.1 准备 OpenBLAS (MSVC 兼容版)
+    # 3.1 Setup OpenBLAS MSVC binaries
     # --------------------------------------------------------------------------
-    if (-not (Test-Path "$OpenBLASDir\lib\openblas.lib")) {
-        Write-Host "--> 正在下载/配置 Windows MSVC OpenBLAS ($targetArch)..." -ForegroundColor Yellow
+    $blasLib = Join-Path $OpenBLASDir "lib\libopenblas.lib"
+    if (-not (Test-Path $blasLib)) {
+        Write-Host "--> Downloading OpenBLAS MSVC binaries for $targetArch..." -ForegroundColor Yellow
         New-Item -ItemType Directory -Path $OpenBLASDir -Force | Out-Null
         
         $blasZip = Join-Path $BuildWorkDir "openblas.zip"
@@ -168,9 +173,9 @@ function Build-Target-Arch([string]$targetArch) {
     }
 
     # --------------------------------------------------------------------------
-    # 3.2 使用 CMake + MSVC 编译 OpenFST
+    # 3.2 Build OpenFST with CMake + MSVC
     # --------------------------------------------------------------------------
-    Write-Host "--> 正在通过 CMake 编译 OpenFST 静态库..." -ForegroundColor Yellow
+    Write-Host "--> Building OpenFST with CMake..." -ForegroundColor Yellow
     $fstBuild = Join-Path $BuildWorkDir "fst_build"
     New-Item -ItemType Directory -Path $fstBuild -Force | Out-Null
     
@@ -193,31 +198,24 @@ function Build-Target-Arch([string]$targetArch) {
     cmake --build $fstBuild --config Release --parallel
 
     # --------------------------------------------------------------------------
-    # 3.3 编译 Kaldi 核心推理模块 (仅核心，死代码剔除)
+    # 3.3 Compile Kaldi Core Inference Modules (Dead-Code Pruning)
     # --------------------------------------------------------------------------
-    Write-Host "--> 正在编译 Kaldi 核心推理模块 (死代码极致瘦身)..." -ForegroundColor Yellow
+    Write-Host "--> Compiling Kaldi core inference modules..." -ForegroundColor Yellow
     $kaldiObjDir = Join-Path $BuildWorkDir "kaldi_objs"
     New-Item -ItemType Directory -Path $kaldiObjDir -Force | Out-Null
 
     $kaldiInclude = "$KaldiDir\src"
     $fstInclude = "$DepsDir\openfst\src\include"
     $blasInclude = "$OpenBLASDir\include"
+    $voskInclude = "$VoskApiDir\src"
 
-    $includes = @(
-        "/I`"$kaldiInclude`"",
-        "/I`"$fstInclude`"",
-        "/I`"$blasInclude`"",
-        "/I`"$VoskApiDir\src`""
-    ) -join " "
-
-    # 核心推理模块清单 (剔除所有训练、CUDA和离线未用模块)
+    # Core inference modules only (no CUDA, no training, no online bin)
     $modules = @("base", "matrix", "util", "feat", "tree", "gmm", "lat", "hmm", "decoder", "nnet3", "online2", "rnnlm")
     $ccFiles = @()
     foreach ($m in $modules) {
         $mPath = Join-Path "$KaldiDir\src" $m
         if (Test-Path $mPath) {
             Get-ChildItem -Path $mPath -Filter "*.cc" | ForEach-Object {
-                # 排除测试用例与训练主程序
                 if (-not ($_.Name -like "*-test.cc") -and -not ($_.Name -like "*-bin.cc")) {
                     $ccFiles += $_.FullName
                 }
@@ -225,98 +223,126 @@ function Build-Target-Arch([string]$targetArch) {
         }
     }
 
-    Write-Host "--> 正在使用 MSVC cl.exe 编译 $($ccFiles.Count) 个 Kaldi 核心源文件..." -ForegroundColor Gray
+    Write-Host "--> Found $($ccFiles.Count) Kaldi source files to compile..." -ForegroundColor Gray
     
-    # 优化编译选项: /O2(极速性能), /Gy(函数级链接), /Gw(数据级链接), /GL(全程序优化), /MD(动态运行时)
-    $clFlags = "/nologo /c /O2 /Gy /Gw /GL /EHsc /MD /D_CRT_SECURE_NO_WARNINGS /DHAVE_OPENBLAS=1 /DFST_NO_DYNAMIC_LINKING=1 /D_USE_MATH_DEFINES"
+    $clArgs = @(
+        "/nologo",
+        "/c",
+        "/O2",
+        "/Gy",
+        "/Gw",
+        "/GL",
+        "/EHsc",
+        "/MD",
+        "/D_CRT_SECURE_NO_WARNINGS",
+        "/DHAVE_OPENBLAS=1",
+        "/DFST_NO_DYNAMIC_LINKING=1",
+        "/D_USE_MATH_DEFINES",
+        "/I$kaldiInclude",
+        "/I$fstInclude",
+        "/I$blasInclude",
+        "/I$voskInclude"
+    )
 
-    # 分批次编译以防命令行过长
-    $batchSize = 40
+    # Batch compile in groups of 30
+    $batchSize = 30
     for ($i = 0; $i -lt $ccFiles.Count; $i += $batchSize) {
         $batch = $ccFiles[$i..[Math]::Min($i + $batchSize - 1, $ccFiles.Count - 1)]
-        $filesStr = ($batch | ForEach-Object { "`"$_`"" }) -join " "
-        cmd.exe /c "cd /d `"$kaldiObjDir`" && cl.exe $clFlags $includes $filesStr"
+        $currentClArgs = $clArgs + $batch
+        
+        Push-Location $kaldiObjDir
+        try {
+            & cl.exe $currentClArgs
+        } finally {
+            Pop-Location
+        }
     }
 
     # --------------------------------------------------------------------------
-    # 3.4 编译 Vosk API
+    # 3.4 Compile Vosk API
     # --------------------------------------------------------------------------
-    Write-Host "--> 正在编译 Vosk API (vosk_api.cc)..." -ForegroundColor Yellow
-    cmd.exe /c "cd /d `"$kaldiObjDir`" && cl.exe $clFlags $includes `"$VoskApiDir\src\vosk_api.cc`""
+    Write-Host "--> Compiling Vosk API (vosk_api.cc)..." -ForegroundColor Yellow
+    Push-Location $kaldiObjDir
+    try {
+        & cl.exe $clArgs "$VoskApiDir\src\vosk_api.cc"
+    } finally {
+        Pop-Location
+    }
 
     # --------------------------------------------------------------------------
-    # 3.5 打包纯净版静态库 (libvosk.lib)
+    # 3.5 Build Static Library (libvosk.lib)
     # --------------------------------------------------------------------------
     if ($LinkType -eq "all" -or $LinkType -eq "static") {
-        Write-Host "--> 正在使用 MSVC lib.exe 打包瘦身纯静态库 (libvosk.lib)..." -ForegroundColor Green
+        Write-Host "--> Packaging static library (libvosk.lib)..." -ForegroundColor Green
         
-        $allObjs = Get-ChildItem -Path $kaldiObjDir -Filter "*.obj" | ForEach-Object { "`"$($_.FullName)`"" }
-        $fstLibs = Get-ChildItem -Path $fstBuild -Recurse -Filter "*.lib" | ForEach-Object { "`"$($_.FullName)`"" }
-        $blasLibs = Get-ChildItem -Path "$OpenBLASDir\lib" -Filter "*.lib" | ForEach-Object { "`"$($_.FullName)`"" }
+        $allObjs = Get-ChildItem -Path $kaldiObjDir -Filter "*.obj" | ForEach-Object { $_.FullName }
+        $fstLibs = Get-ChildItem -Path $fstBuild -Recurse -Filter "*.lib" | ForEach-Object { $_.FullName }
+        $blasLibs = Get-ChildItem -Path "$OpenBLASDir\lib" -Filter "*.lib" | ForEach-Object { $_.FullName }
 
         $staticOut = Join-Path $OutDir "libvosk.lib"
         $staticOutAlt = Join-Path $OutDir "libvosk_static.lib"
         
-        # 将参数写入响应文件，防止命令行长度溢出
         $rspFile = Join-Path $BuildWorkDir "static_lib.rsp"
-        $rspContent = @("/NOLOGO", "/LTCG", "/OUT:`"$staticOut`"") + $allObjs + $fstLibs + $blasLibs
-        $rspContent | Set-Content -Path $rspFile -Encoding ASCII
+        $rspLines = @("/NOLOGO", "/LTCG", "/OUT:$staticOut") + $allObjs + $fstLibs + $blasLibs
+        [System.IO.File]::WriteAllLines($rspFile, $rspLines)
 
-        cmd.exe /c "lib.exe @`"$rspFile`""
+        $rspArg = "@$rspFile"
+        & lib.exe $rspArg
         Copy-Item -Path $staticOut -Destination $staticOutAlt -Force
 
         $libSizeMB = [Math]::Round((Get-Item $staticOut).Length / 1MB, 2)
-        Write-Host "✔ 🎉 MSVC 纯静态库打包成功: $staticOut (${libSizeMB} MB)" -ForegroundColor Green
+        Write-Host "MSVC static library generated: $staticOut (${libSizeMB} MB)" -ForegroundColor Green
     }
 
     # --------------------------------------------------------------------------
-    # 3.6 编译动态库 (libvosk.dll + 导入库 libvosk.lib)
+    # 3.6 Build Dynamic Library (libvosk.dll + libvosk.lib)
     # --------------------------------------------------------------------------
     if ($LinkType -eq "all" -or $LinkType -eq "shared") {
-        Write-Host "--> 正在使用 MSVC link.exe 链接动态库 (libvosk.dll)..." -ForegroundColor Green
+        Write-Host "--> Linking dynamic library (libvosk.dll)..." -ForegroundColor Green
         
         $dllOut = Join-Path $OutDir "libvosk.dll"
         $implibOut = Join-Path $OutDir "libvosk.lib"
         
         $dllRspFile = Join-Path $BuildWorkDir "dll_link.rsp"
-        $allObjs = Get-ChildItem -Path $kaldiObjDir -Filter "*.obj" | ForEach-Object { "`"$($_.FullName)`"" }
-        $fstLibs = Get-ChildItem -Path $fstBuild -Recurse -Filter "*.lib" | ForEach-Object { "`"$($_.FullName)`"" }
-        $blasLibs = Get-ChildItem -Path "$OpenBLASDir\lib" -Filter "*.lib" | ForEach-Object { "`"$($_.FullName)`"" }
+        $allObjs = Get-ChildItem -Path $kaldiObjDir -Filter "*.obj" | ForEach-Object { $_.FullName }
+        $fstLibs = Get-ChildItem -Path $fstBuild -Recurse -Filter "*.lib" | ForEach-Object { $_.FullName }
+        $blasLibs = Get-ChildItem -Path "$OpenBLASDir\lib" -Filter "*.lib" | ForEach-Object { $_.FullName }
 
-        $dllRspContent = @(
+        $dllRspLines = @(
             "/NOLOGO",
             "/DLL",
             "/OPT:REF,ICF",
-            "/OUT:`"$dllOut`"",
-            "/IMPLIB:`"$implibOut`"",
+            "/OUT:$dllOut",
+            "/IMPLIB:$implibOut",
             "ws2_32.lib",
             "advapi32.lib",
             "userenv.lib"
         ) + $allObjs + $fstLibs + $blasLibs
         
-        $dllRspContent | Set-Content -Path $dllRspFile -Encoding ASCII
+        [System.IO.File]::WriteAllLines($dllRspFile, $dllRspLines)
 
-        cmd.exe /c "link.exe @`"$dllRspFile`""
+        $dllRspArg = "@$dllRspFile"
+        & link.exe $dllRspArg
 
-        # 拷贝 OpenBLAS DLL 供动态库运行时加载
+        # Copy runtime DLLs
         Get-ChildItem -Path "$OpenBLASDir\bin" -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
             Copy-Item -Path $_.FullName -Destination $OutDir -Force
         }
 
         $dllSizeMB = [Math]::Round((Get-Item $dllOut).Length / 1MB, 2)
-        Write-Host "✔ 🎉 MSVC 动态链接库生成成功: $dllOut (${dllSizeMB} MB)" -ForegroundColor Green
+        Write-Host "MSVC dynamic library generated: $dllOut (${dllSizeMB} MB)" -ForegroundColor Green
     }
 
-    # 拷贝 C API 头文件
+    # Copy header
     Copy-Item -Path "$VoskApiDir\src\vosk_api.h" -Destination $OutDir -Force
-    Write-Host "✔ 导出完成: $OutDir" -ForegroundColor Green
+    Write-Host "Build output exported to: $OutDir" -ForegroundColor Green
 }
 
 # ------------------------------------------------------------------------------
-# 4. 执行入口
+# 4. Entrypoint
 # ------------------------------------------------------------------------------
 if ($OnlyPackage) {
-    Write-Host "💡 仅打包模式已跳过编译。" -ForegroundColor Yellow
+    Write-Host "OnlyPackage mode: skipping build." -ForegroundColor Yellow
     exit 0
 }
 
@@ -331,5 +357,5 @@ if ($Arch -eq "all") {
 }
 
 Write-Host "==============================================================================" -ForegroundColor Green
-Write-Host "✔ 🎉 全部 Windows MSVC 目标构建完成！" -ForegroundColor Green
+Write-Host "Windows MSVC build completed successfully!" -ForegroundColor Green
 Write-Host "==============================================================================" -ForegroundColor Green
