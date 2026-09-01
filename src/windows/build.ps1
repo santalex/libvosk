@@ -108,34 +108,43 @@ function Prepare-Dependencies {
         New-Item -ItemType Directory -Path $DepsDir -Force | Out-Null
     }
 
-    Set-Location $DepsDir
+    $openfstDir = Join-Path $DepsDir "openfst"
+    $kaldiDir = Join-Path $DepsDir "kaldi"
+    $voskDir = Join-Path $DepsDir "vosk-api"
 
     # A. OpenFST (CMake & MSVC Compatible Port)
-    if (-not (Test-Path "openfst")) {
+    if (-not (Test-Path (Join-Path $openfstDir "CMakeLists.txt"))) {
         Write-Host "--> Cloning OpenFST repository (k2-fsa CMake port)..." -ForegroundColor Yellow
-        git clone --depth=1 https://github.com/k2-fsa/openfst openfst
+        if (Test-Path $openfstDir) {
+            Remove-Item -Recurse -Force $openfstDir -ErrorAction SilentlyContinue
+        }
+        git clone --depth=1 https://github.com/k2-fsa/openfst $openfstDir
     }
 
     # B. Kaldi (Vosk Fork)
-    if (-not (Test-Path "kaldi")) {
+    if (-not (Test-Path (Join-Path $kaldiDir "src"))) {
         Write-Host "--> Cloning Kaldi repository..." -ForegroundColor Yellow
-        git clone -b vosk-android --single-branch --depth=1 https://github.com/alphacep/kaldi kaldi
+        if (Test-Path $kaldiDir) {
+            Remove-Item -Recurse -Force $kaldiDir -ErrorAction SilentlyContinue
+        }
+        git clone -b vosk-android --single-branch --depth=1 https://github.com/alphacep/kaldi $kaldiDir
     }
 
     # Generate Kaldi version.h if missing
-    $versionH = Join-Path "$DepsDir\kaldi\src\base" "version.h"
+    $versionH = Join-Path "$kaldiDir\src\base" "version.h"
     if (-not (Test-Path $versionH)) {
         "#ifndef KALDI_BASE_VERSION_H_`n#define KALDI_BASE_VERSION_H_`n#define KALDI_VERSION `"5.5`"`n#define KALDI_GIT_HEAD `"vosk`"`n#endif" | Set-Content -Path $versionH -Encoding ASCII
     }
 
     # C. Vosk API
-    if (-not (Test-Path "vosk-api")) {
+    if (-not (Test-Path (Join-Path $voskDir "src"))) {
         Write-Host "--> Cloning Vosk API repository (Tag: $VoskTag)..." -ForegroundColor Yellow
+        if (Test-Path $voskDir) {
+            Remove-Item -Recurse -Force $voskDir -ErrorAction SilentlyContinue
+        }
         $tagParam = if ($VoskTag -and $VoskTag -ne "master") { "-b", "$VoskTag" } else { @() }
-        git clone @tagParam --single-branch --depth=1 https://github.com/alphacep/vosk-api vosk-api
+        git clone @tagParam --single-branch --depth=1 https://github.com/alphacep/vosk-api $voskDir
     }
-
-    Set-Location $ScriptDir
 }
 
 # ------------------------------------------------------------------------------
