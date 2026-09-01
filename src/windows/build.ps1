@@ -356,10 +356,30 @@ function Build-Target-Arch([string]$targetArch) {
     }
 
     # --------------------------------------------------------------------------
-    # 3.4 Compile Vosk API
+    # 3.4 Compile Vosk API (CPU Standard Sources)
     # --------------------------------------------------------------------------
-    Write-Host "--> Compiling Vosk API (*.cc)..." -ForegroundColor Yellow
-    $voskCcFiles = Get-ChildItem -Path "$VoskApiDir\src" -Filter "*.cc" | ForEach-Object { $_.FullName }
+    Write-Host "--> Compiling Vosk API CPU sources..." -ForegroundColor Yellow
+    $voskSources = @(
+        "vosk_api.cc",
+        "recognizer.cc",
+        "model.cc",
+        "spk_model.cc",
+        "language_model.cc"
+    )
+    $voskCcFiles = @()
+    foreach ($src in $voskSources) {
+        $fullPath = Join-Path "$VoskApiDir\src" $src
+        if (Test-Path $fullPath) {
+            $voskCcFiles += $fullPath
+        }
+    }
+    if (Test-Path "$VoskApiDir\src\postprocessor.cc") {
+        $voskCcFiles += "$VoskApiDir\src\postprocessor.cc"
+    }
+    if (Test-Path "$VoskApiDir\src\processor.cc") {
+        $voskCcFiles += "$VoskApiDir\src\processor.cc"
+    }
+
     Push-Location $kaldiObjDir
     try {
         & cl.exe $clArgs $voskCcFiles
@@ -403,7 +423,7 @@ function Build-Target-Arch([string]$targetArch) {
         Write-Host "--> Linking dynamic library (libvosk.dll)..." -ForegroundColor Green
         
         $dllOut = Join-Path $OutDir "libvosk.dll"
-        $implibOut = Join-Path $OutDir "libvosk.lib"
+        $implibOut = if ($LinkType -eq "all") { Join-Path $OutDir "libvosk_dll.lib" } else { Join-Path $OutDir "libvosk.lib" }
         
         $dllRspFile = Join-Path $BuildWorkDir "dll_link.rsp"
         $allObjs = Get-ChildItem -Path $kaldiObjDir -Filter "*.obj" | ForEach-Object { $_.FullName }
