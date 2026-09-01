@@ -5,7 +5,7 @@ set -e
 # build.sh - Vosk API 全平台 (64位 & 32位) 交叉架构工业级 Docker & Native 编译主控引擎
 #
 # 支持参数 (GNU 命名风格):
-#   --os <macos|ios|apple|windows|linux|android|all> (默认: all)
+#   --os <macos|ios|tvos|watchos|visionos|apple|windows-msvc|windows-gnu|windows|linux|android|all> (默认: all)
 #   --arch <x86_64|aarch64|arm64|arm64-v8a|riscv64|armv7l|x86|universal|all> (默认: all)
 #   --link-type <all|static|shared>           (默认: all)
 #   --vosk-tag <v0.3.50|v0.3.45|master|...>   (默认: v0.3.50)
@@ -35,7 +35,7 @@ show_help() {
     echo "  ./build.sh [选项]"
     echo ""
     echo "选项说明:"
-    echo "  --os <系统>         指定目标系统 (macos|ios|apple|windows|linux|android|all, 默认: all)"
+    echo "  --os <系统>         指定目标系统 (macos|ios|tvos|watchos|visionos|apple|windows-msvc|windows-gnu|windows|linux|android|all, 默认: all)"
     echo "  --arch <架构>       指定目标架构 (x86_64|aarch64|arm64|arm64-v8a|riscv64|armv7l|x86|universal|all, 默认: all)"
     echo "  --link-type <形式>  指定打包产物形式 (all|static|shared, 默认: all)"
     echo "  --vosk-tag <版本>   指定 Vosk API Git Tag 版本 (默认: v0.3.50)"
@@ -46,6 +46,7 @@ show_help() {
     echo ""
     echo "使用示例:"
     echo "  ./build.sh --only-package                       # 直接提取当前 dist/ 打包输出至 packages/"
+    echo "  ./build.sh --os windows-gnu --arch x86_64 -p    # 编译 Windows GNU (MinGW) 并自动打包"
     echo "  ./build.sh --os android --arch arm64-v8a -p      # 编译 Android 并自动打包"
     echo "  ./build.sh --os macos --arch universal -p        # 编译 macOS Universal 并打包"
     echo "=============================================================================="
@@ -451,8 +452,8 @@ build_apple_native() {
     fi
 }
 
-# 1. Apple 目标处理 (macos / ios / tvos / apple)
-if [ "${TARGET_OS}" = "macos" ] || [ "${TARGET_OS}" = "ios" ] || [ "${TARGET_OS}" = "tvos" ] || [ "${TARGET_OS}" = "apple" ] || [ "${TARGET_OS}" = "all" ]; then
+# 1. Apple 目标处理 (macos / ios / tvos / watchos / visionos / apple)
+if [ "${TARGET_OS}" = "macos" ] || [ "${TARGET_OS}" = "ios" ] || [ "${TARGET_OS}" = "tvos" ] || [ "${TARGET_OS}" = "watchos" ] || [ "${TARGET_OS}" = "visionos" ] || [ "${TARGET_OS}" = "apple" ] || [ "${TARGET_OS}" = "all" ]; then
     if [ "$(uname)" = "Darwin" ]; then
         if [ "${TARGET_OS}" = "macos" ]; then
             build_apple_native "macos" "${TARGET_ARCH}"
@@ -460,18 +461,29 @@ if [ "${TARGET_OS}" = "macos" ] || [ "${TARGET_OS}" = "ios" ] || [ "${TARGET_OS}
             build_apple_native "ios" "${TARGET_ARCH}"
         elif [ "${TARGET_OS}" = "tvos" ]; then
             build_apple_native "tvos" "${TARGET_ARCH}"
+        elif [ "${TARGET_OS}" = "watchos" ]; then
+            build_apple_native "watchos" "${TARGET_ARCH}"
+        elif [ "${TARGET_OS}" = "visionos" ]; then
+            build_apple_native "visionos" "${TARGET_ARCH}"
         else
             build_apple_native "all" "${TARGET_ARCH}"
         fi
     else
-        echo "⚠️ 注意: 编译 Apple (macOS/iOS/tvOS) 必须在 macOS 宿主机环境运行，非 macOS 自动跳过。"
+        echo "⚠️ 注意: 编译 Apple (macOS/iOS/tvOS/watchOS/visionOS) 必须在 macOS 宿主机环境运行，非 macOS 自动跳过。"
     fi
 fi
 
-# 2. Windows 目标处理 (原生 MSVC / PowerShell 构建)
-if [ "${TARGET_OS}" = "windows" ] || [ "${TARGET_OS}" = "all" ]; then
+# 2. Windows-GNU 目标处理 (Docker / MinGW-w64 跨平台交叉编译)
+if [ "${TARGET_OS}" = "windows-gnu" ] || [ "${TARGET_OS}" = "all" ]; then
+    if [ "${TARGET_ARCH}" = "x86_64" ] || [ "${TARGET_ARCH}" = "all" ]; then build_target_docker "windows-gnu" "x86_64"; fi
+    if [ "${TARGET_ARCH}" = "arm64" ] || [ "${TARGET_ARCH}" = "aarch64" ] || [ "${TARGET_ARCH}" = "all" ]; then build_target_docker "windows-gnu" "arm64"; fi
+    if [ "${TARGET_ARCH}" = "x86" ] || [ "${TARGET_ARCH}" = "i686" ] || [ "${TARGET_ARCH}" = "all" ]; then build_target_docker "windows-gnu" "x86"; fi
+fi
+
+# 3. Windows-MSVC 目标处理 (原生 MSVC / PowerShell 构建)
+if [ "${TARGET_OS}" = "windows-msvc" ] || [ "${TARGET_OS}" = "windows" ] || [ "${TARGET_OS}" = "all" ]; then
     if [ "$(uname)" = "Darwin" ] || [ "$(expr substr $(uname -s) 1 5)" = "Linux" ]; then
-        echo "💡 提示: Windows 目标已升级为原生 MSVC 纯净编译架构 (GitHub Actions 中在 windows-2022 宿主上运行 src/windows/build.ps1)。"
+        echo "💡 提示: Windows-MSVC 目标使用原生 MSVC 纯净编译架构 (在 Windows 宿主上运行 .\\src\\windows-msvc\\build.ps1)。"
     fi
 fi
 

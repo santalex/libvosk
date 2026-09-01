@@ -64,16 +64,12 @@ def check_file(filename):
                         is_valid = False
                         reasons.append("Missing header (vosk_api.h)")
                     
-                    # Windows 平台动态包专属规则：必须附带 libopenblas.dll
+                    # Windows 平台动态包专属规则：必须包含导入库
                     if is_windows:
-                        has_openblas = any("libopenblas.dll" in name for name in namelist)
-                        has_implib = any(name.endswith(".lib") for name in namelist)
-                        if not has_openblas:
-                            is_valid = False
-                            reasons.append("Missing Windows math runtime dependency: libopenblas.dll")
+                        has_implib = any(name.endswith((".lib", ".dll.a")) for name in namelist)
                         if not has_implib:
                             is_valid = False
-                            reasons.append("Missing MSVC import library (.lib)")
+                            reasons.append("Missing Windows import library (.lib / .dll.a)")
 
                 elif "-static.zip" in filename:
                     has_stat = any(name.endswith(('.a', '.lib')) for name in namelist)

@@ -20,12 +20,17 @@ This repository provides an automated, hermetic, Docker-based multi-platform bui
 | **macOS** | `arm64` *(macOS 11.0+)* | `libvosk-macos-arm64-shared.zip` (`.dylib`) | `libvosk-macos-arm64-static.zip` (`.a`) | - |
 | **macOS** | `x86_64` *(macOS 11.0+)* | `libvosk-macos-x86_64-shared.zip` (`.dylib`) | `libvosk-macos-x86_64-static.zip` (`.a`) | - |
 | **macOS** | `universal` *(macOS 11.0+)* | `libvosk-macos-universal-shared.zip` | `libvosk-macos-universal-static.zip` | `libvosk-macos-xcframework.zip` |
-| **iOS** | `universal` *(iOS 13.0+)* | - | `libvosk-ios-static.zip` (`.a`) | `libvosk-ios-xcframework.zip` |
-| **tvOS** | `universal` *(tvOS 13.0+)* | - | `libvosk-tvos-static.zip` (`.a`) | `libvosk-tvos-xcframework.zip` |
-| **Apple** | `universal` (macOS+iOS+tvOS) | - | - | `libvosk-apple-xcframework.zip` (Super `XCFramework`) |
-| **Windows** | `x86_64` | `libvosk.dll` + `libvosk.lib` | `libvosk_static.lib` + `libvosk.a` | - |
-| **Windows** | `arm64` | `libvosk.dll` + `libvosk.lib` | `libvosk_static.lib` + `libvosk.a` | - |
-| **Windows** | `x86` | `libvosk.dll` + `libvosk.lib` | `libvosk_static.lib` + `libvosk.a` | - |
+| **iOS** | `universal` *(iOS 12.0+)* | - | `libvosk-ios-static.zip` (`.a`) | `libvosk-ios-xcframework.zip` |
+| **tvOS** | `universal` *(tvOS 12.0+)* | - | `libvosk-tvos-static.zip` (`.a`) | `libvosk-tvos-xcframework.zip` |
+| **watchOS** | `universal` *(watchOS 6.0+)* | - | `libvosk-watchos-static.zip` (`.a`) | `libvosk-watchos-xcframework.zip` |
+| **visionOS** | `universal` *(visionOS 1.0+)* | - | `libvosk-visionos-static.zip` (`.a`) | `libvosk-visionos-xcframework.zip` |
+| **Apple** | `universal` (macOS+iOS+tvOS+watchOS+visionOS) | - | - | `libvosk-apple-xcframework.zip` (Super `XCFramework`) |
+| **Windows (MSVC)** | `x86_64` | `libvosk-windows-msvc-x86_64-shared.zip` | `libvosk-windows-msvc-x86_64-static.zip` | - |
+| **Windows (MSVC)** | `arm64` | `libvosk-windows-msvc-arm64-shared.zip` | `libvosk-windows-msvc-arm64-static.zip` | - |
+| **Windows (MSVC)** | `x86` | `libvosk-windows-msvc-x86-shared.zip` | `libvosk-windows-msvc-x86-static.zip` | - |
+| **Windows (GNU)** | `x86_64` | `libvosk-windows-gnu-x86_64-shared.zip` | `libvosk-windows-gnu-x86_64-static.zip` | - |
+| **Windows (GNU)** | `arm64` | `libvosk-windows-gnu-arm64-shared.zip` | `libvosk-windows-gnu-arm64-static.zip` | - |
+| **Windows (GNU)** | `x86` | `libvosk-windows-gnu-x86-shared.zip` | `libvosk-windows-gnu-x86-static.zip` | - |
 | **Linux** | `x86_64` | `libvosk.so` | `libvosk.a` | - |
 | **Linux** | `aarch64` | `libvosk.so` | `libvosk.a` | - |
 | **Linux** | `riscv64` | `libvosk.so` | `libvosk.a` | - |
@@ -48,32 +53,44 @@ This repository provides an automated, hermetic, Docker-based multi-platform bui
 # macOS Universal (arm64 + x86_64)
 ./build.sh --os macos --arch universal
 
-# iOS XCFramework
+# iOS / tvOS / watchOS / visionOS XCFramework
 ./build.sh --os ios --arch universal
-
-# tvOS XCFramework
 ./build.sh --os tvos --arch universal
+./build.sh --os watchos --arch universal
+./build.sh --os visionos --arch universal
 
-# Apple Super XCFramework (macOS + iOS + tvOS)
+# Apple Super XCFramework (All 5 Apple OSs)
 ./build.sh --os apple --arch universal
 
-# Windows 64-bit Intel/AMD
-./build.sh --os windows --arch x86_64
+# Windows GNU (MinGW-w64 交叉编译)
+./build.sh --os windows-gnu --arch x86_64
+./build.sh --os windows-gnu --arch arm64
 
-# Windows 64-bit ARM
-./build.sh --os windows --arch arm64
+# Windows MSVC (PowerShell 原生编译)
+.\src\windows-msvc\build.ps1 -Arch x86_64
 
-# Windows 32-bit Intel
-./build.sh --os windows --arch x86
-
-# Linux RISC-V 64-bit
+# Linux RISC-V 64-bit / ARM64
 ./build.sh --os linux --arch riscv64
-
-# Linux ARM64
 ./build.sh --os linux --arch aarch64
 
-# Android 64-bit ARM
+# Android ARM64
 ./build.sh --os android --arch arm64-v8a
+```
+
+---
+
+## 🧪 Automated Testing & Static Library Slimming
+
+### 1. End-to-End (E2E) Test Suite
+The repository includes an automated cross-platform E2E test harness covering model loading, streaming recognition, word timestamps, dynamic grammar constraints, and recognizer reset:
+```bash
+./tests/run_tests.sh dist/macos/arm64
+```
+
+### 2. Static Library Transitive Slimming
+Safely prunes unused Kaldi offline and training object files, reducing static archive size from ~360MB to ~170MB (53%+ reduction) in seconds:
+```bash
+python3 tools/slim_archive.py dist/macos/arm64/libvosk.a dist/macos/arm64/libvosk_slim.a
 ```
 
 ---

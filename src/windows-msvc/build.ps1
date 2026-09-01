@@ -166,7 +166,7 @@ function Build-Target-Arch([string]$targetArch) {
     Initialize-MSVC-Environment $targetArch
 
     $BuildWorkDir = Join-Path $ScriptDir "build_$targetArch"
-    $OutDir = Join-Path $RootDir "dist\windows\$targetArch"
+    $OutDir = Join-Path $RootDir "dist\windows-msvc\$targetArch"
     New-Item -ItemType Directory -Path $BuildWorkDir -Force | Out-Null
     New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
 

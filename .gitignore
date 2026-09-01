@@ -10,6 +10,12 @@ src/apple/vosk-api/
 src/apple/openfst/
 src/apple/build/
 
+# Test Cache & Artifacts
+tests/model/
+tests/*.wav
+tests/*.zip
+tests/test_e2e_runner*
+
 # OS / Editor Junk Files
 .DS_Store
 *.tmp

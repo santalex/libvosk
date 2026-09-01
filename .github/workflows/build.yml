@@ -4,26 +4,32 @@ on:
   workflow_dispatch:
     inputs:
       target_os:
-        description: 'Target OS (windows, macos, linux, android, all)'
+        description: 'Target OS (windows-msvc, windows-gnu, macos, linux, android, ios, tvos, watchos, visionos, all)'
         required: true
         type: choice
         options:
-          - 'windows'
           - 'all'
+          - 'windows-msvc'
+          - 'windows-gnu'
           - 'macos'
           - 'linux'
           - 'android'
-        default: 'windows'
+          - 'ios'
+          - 'tvos'
+          - 'watchos'
+          - 'visionos'
+        default: 'all'
       target_arch:
-        description: 'Target Arch (x86_64, arm64, x86, all)'
+        description: 'Target Arch (x86_64, arm64, x86, universal, all)'
         required: true
         type: choice
         options:
-          - 'x86_64'
           - 'all'
+          - 'x86_64'
           - 'arm64'
           - 'x86'
-        default: 'x86_64'
+          - 'universal'
+        default: 'all'
       vosk_tag:
         description: 'Vosk API Git Tag (e.g. v0.3.50)'
         required: true
@@ -65,16 +71,34 @@ jobs:
           - os: tvos
             arch: universal
             runner: macos-14
+          # watchOS
+          - os: watchos
+            arch: universal
+            runner: macos-14
+          # visionOS
+          - os: visionos
+            arch: universal
+            runner: macos-14
           # Windows (MSVC Native)
-          - os: windows
+          - os: windows-msvc
             arch: x86_64
             runner: windows-2022
-          - os: windows
+          - os: windows-msvc
             arch: arm64
             runner: windows-2022
-          - os: windows
+          - os: windows-msvc
             arch: x86
             runner: windows-2022
+          # Windows (GNU MinGW Cross)
+          - os: windows-gnu
+            arch: x86_64
+            runner: ubuntu-latest
+          - os: windows-gnu
+            arch: x86
+            runner: ubuntu-latest
+          - os: windows-gnu
+            arch: arm64
+            runner: ubuntu-latest
           # Linux
           - os: linux
             arch: x86_64
@@ -117,7 +141,7 @@ jobs:
           brew untap aws/tap 2>/dev/null || true
           HOMEBREW_NO_AUTO_UPDATE=1 brew install autoconf automake libtool
 
-      - name: Build Vosk Target (macOS / Linux / Android)
+      - name: Build Vosk Target (macOS / Linux / Android / Windows-GNU)
         if: |
           (runner.os != 'Windows') &&
           ((github.event_name == 'push') ||
@@ -136,7 +160,7 @@ jobs:
         shell: powershell
         run: |
           $VOSK_TAG = "${{ inputs.vosk_tag || 'v0.3.50' }}"
-          .\src\windows\build.ps1 -Arch "${{ matrix.arch }}" -VoskTag "$VOSK_TAG"
+          .\src\windows-msvc\build.ps1 -Arch "${{ matrix.arch }}" -VoskTag "$VOSK_TAG"
 
       - name: Upload Target Artifact
         if: |

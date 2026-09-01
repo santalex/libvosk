@@ -1,0 +1,71 @@
+name: Slim Static Archive Repackager
+
+on:
+  workflow_dispatch:
+    inputs:
+      vosk_tag:
+        description: 'Vosk API Tag (e.g. v0.3.50)'
+        required: true
+        default: 'v0.3.50'
+      run_id:
+        description: 'GitHub Action Run ID to download packages from (leave empty for latest release)'
+        required: false
+        default: ''
+
+jobs:
+  slim-and-repackage:
+    name: Slim Static Archives
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download Artifacts or Release
+        run: |
+          mkdir -p raw_packages slim_packages
+          if [ -n "${{ inputs.run_id }}" ]; then
+            echo "--> Downloading artifacts from Run ID: ${{ inputs.run_id }}..."
+            gh run download ${{ inputs.run_id }} -D raw_packages
+          else
+            echo "--> Downloading latest release assets..."
+            gh release download "${{ inputs.vosk_tag }}" -D raw_packages || true
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Process and Slim Static Archives
+        run: |
+          find raw_packages -name "*-static.zip" | while read -r zip_file; do
+            base_name=$(basename "$zip_file" .zip)
+            echo "=============================================================================="
+            echo "  Processing: ${base_name}"
+            echo "=============================================================================="
+            
+            work_dir="tmp_${base_name}"
+            mkdir -p "$work_dir"
+            unzip -q "$zip_file" -d "$work_dir"
+            
+            # Find static library
+            static_lib=$(find "$work_dir" -name "*.a" -o -name "*.lib" | head -n 1)
+            if [ -n "$static_lib" ]; then
+              slim_lib="${work_dir}/libvosk_slim.$(echo "$static_lib" | awk -F. '{print $NF}')"
+              python3 tools/slim_archive.py "$static_lib" "$slim_lib" --header src/apple/vosk-api/src/vosk_api.h
+              mv "$slim_lib" "$static_lib"
+            fi
+            
+            # Repack
+            (cd "$work_dir" && zip -r -q "${GITHUB_WORKSPACE}/slim_packages/${base_name}.zip" .)
+            rm -rf "$work_dir"
+          done
+
+      - name: Upload Slim Packages Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libvosk-slim-static-packages
+          path: slim_packages/*
+          retention-days: 14
