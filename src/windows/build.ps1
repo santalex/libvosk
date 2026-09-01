@@ -358,10 +358,15 @@ function Build-Target-Arch([string]$targetArch) {
     # --------------------------------------------------------------------------
     # 3.4 Compile Vosk API
     # --------------------------------------------------------------------------
-    Write-Host "--> Compiling Vosk API (vosk_api.cc)..." -ForegroundColor Yellow
+    Write-Host "--> Compiling Vosk API (*.cc)..." -ForegroundColor Yellow
+    $voskCcFiles = Get-ChildItem -Path "$VoskApiDir\src" -Filter "*.cc" | ForEach-Object { $_.FullName }
     Push-Location $kaldiObjDir
     try {
-        & cl.exe $clArgs "$VoskApiDir\src\vosk_api.cc"
+        & cl.exe $clArgs $voskCcFiles
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Vosk API compilation failed with exit code $LASTEXITCODE"
+            exit 1
+        }
     } finally {
         Pop-Location
     }
