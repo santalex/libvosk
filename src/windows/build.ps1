@@ -202,6 +202,8 @@ function Build-Target-Arch([string]$targetArch) {
         Get-ChildItem -Path "$OpenFSTDir\src\extensions\ngram" -Filter "*.cc" | ForEach-Object { $fstCcFiles += $_.FullName }
     }
 
+    $compatHeader = Join-Path $ScriptDir "msvc_compat.h"
+
     $fstClArgs = @(
         "/nologo",
         "/c",
@@ -219,6 +221,7 @@ function Build-Target-Arch([string]$targetArch) {
         "/D_USE_MATH_DEFINES",
         "/Dssize_t=intptr_t",
         "/D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS",
+        "/FI$compatHeader",
         "/I$OpenFSTDir\src\include"
     )
 
@@ -311,6 +314,7 @@ function Build-Target-Arch([string]$targetArch) {
         "/Dlapack_complex_double=std::complex<double>",
         "/DLAPACK_COMPLEX_CUSTOM=1",
         "/D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS",
+        "/FI$compatHeader",
         "/I$kaldiInclude",
         "/I$fstInclude",
         "/I$blasInclude",
