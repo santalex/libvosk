@@ -59,21 +59,41 @@ fi
 TEST_BIN="${SCRIPT_DIR}/test_e2e_runner"
 rm -f "${TEST_BIN}"
 
-# 检测动态库 vs 静态库
+TESTED_COUNT=0
+
+# 1. 测试动态共享库 (.dylib / .so / .dll)
 if [ -f "${LIB_DIR}/libvosk.dylib" ]; then
-    echo "--> [macOS 动态库测试] 链接 libvosk.dylib ..."
+    echo "--> [1/2] [macOS 动态库测试] 链接 libvosk.dylib ..."
+    TEST_BIN="${SCRIPT_DIR}/test_e2e_shared"
     "${CC}" -O2 -I"$(dirname "${HEADER_FILE}")" "${SCRIPT_DIR}/test_vosk_e2e.c" \
         -L"${LIB_DIR}" -lvosk -Wl,-rpath,"${LIB_DIR}" -o "${TEST_BIN}"
     "${TEST_BIN}" "${MODEL_DIR}" "${WAV_FILE}"
-
+    rm -f "${TEST_BIN}"
+    TESTED_COUNT=$((TESTED_COUNT + 1))
 elif [ -f "${LIB_DIR}/libvosk.so" ]; then
-    echo "--> [Linux 动态库测试] 链接 libvosk.so ..."
+    echo "--> [1/2] [Linux 动态库测试] 链接 libvosk.so ..."
+    TEST_BIN="${SCRIPT_DIR}/test_e2e_shared"
     "${CC}" -O2 -I"$(dirname "${HEADER_FILE}")" "${SCRIPT_DIR}/test_vosk_e2e.c" \
         -L"${LIB_DIR}" -lvosk -lpthread -lm -ldl -Wl,-rpath,"${LIB_DIR}" -o "${TEST_BIN}"
     "${TEST_BIN}" "${MODEL_DIR}" "${WAV_FILE}"
+    rm -f "${TEST_BIN}"
+    TESTED_COUNT=$((TESTED_COUNT + 1))
+elif [ -f "${LIB_DIR}/libvosk.dll" ]; then
+    echo "--> [1/2] [Windows GNU 动态库测试] ..."
+    if command -v wine >/dev/null 2>&1; then
+        TEST_BIN="${SCRIPT_DIR}/test_e2e_shared.exe"
+        x86_64-w64-mingw32-gcc -O2 -I"$(dirname "${HEADER_FILE}")" "${SCRIPT_DIR}/test_vosk_e2e.c" \
+            -L"${LIB_DIR}" -lvosk -o "${TEST_BIN}"
+        WINEDEBUG=-all wine "${TEST_BIN}" "${MODEL_DIR}" "${WAV_FILE}"
+        rm -f "${TEST_BIN}"
+        TESTED_COUNT=$((TESTED_COUNT + 1))
+    fi
+fi
 
-elif [ -f "${LIB_DIR}/libvosk.a" ]; then
-    echo "--> [静态库测试] 链接 libvosk.a ..."
+# 2. 测试静态归档库 (.a)
+if [ -f "${LIB_DIR}/libvosk.a" ]; then
+    echo "--> [2/2] [静态库测试] 链接 libvosk.a ..."
+    TEST_BIN="${SCRIPT_DIR}/test_e2e_static"
     if [ "$(uname)" = "Darwin" ]; then
         clang++ -O2 -I"$(dirname "${HEADER_FILE}")" "${SCRIPT_DIR}/test_vosk_e2e.c" \
             "${LIB_DIR}/libvosk.a" -framework Accelerate -lpthread -lm -ldl -o "${TEST_BIN}"
@@ -82,17 +102,11 @@ elif [ -f "${LIB_DIR}/libvosk.a" ]; then
             "${LIB_DIR}/libvosk.a" -lpthread -lm -ldl -o "${TEST_BIN}"
     fi
     "${TEST_BIN}" "${MODEL_DIR}" "${WAV_FILE}"
+    rm -f "${TEST_BIN}"
+    TESTED_COUNT=$((TESTED_COUNT + 1))
+fi
 
-elif [ -f "${LIB_DIR}/libvosk.dll" ]; then
-    echo "--> [Windows GNU 动态库测试] (若在 Wine 或 Windows 宿主下运行) ..."
-    if command -v wine >/dev/null 2>&1; then
-        x86_64-w64-mingw32-gcc -O2 -I"$(dirname "${HEADER_FILE}")" "${SCRIPT_DIR}/test_vosk_e2e.c" \
-            -L"${LIB_DIR}" -lvosk -o "${TEST_BIN}.exe"
-        WINEDEBUG=-all wine "${TEST_BIN}.exe" "${MODEL_DIR}" "${WAV_FILE}"
-    else
-        echo "⚠️ 注意: 当前非 Windows 环境且无 Wine，跳过 Windows 运行时执行。"
-    fi
-else
+if [ "${TESTED_COUNT}" -eq 0 ]; then
     echo "❌ 错误: 在 ${LIB_DIR} 中未找到可测试的 libvosk 动态库或静态库！"
     exit 1
 fi
