@@ -263,7 +263,7 @@ package_all() {
         python3 -m pip install setuptools wheel cffi >/dev/null 2>&1 || true
 
         # A. 单目标 Wheel
-        for dylib_path in $(find "${DIST_DIR}" -name "*.dylib" -o -name "*.so" -o -name "*.dll" 2>/dev/null); do
+        for dylib_path in $(find "${DIST_DIR}" -name "libvosk.dylib" -o -name "libvosk.so" -o -name "libvosk.dll" 2>/dev/null); do
             target_name=$(basename $(dirname "$dylib_path"))
             os_name=$(basename $(dirname $(dirname "$dylib_path")))
             if [ -n "$target_name" ] && [ -n "$os_name" ] && [ "$os_name" != "." ] && [ "$os_name" != "dist" ] && [ "$target_name" != "universal" ]; then
@@ -274,6 +274,9 @@ package_all() {
                 cp -R src/python/vosk/* tmp_py_build/vosk/
                 cp src/python/setup.py tmp_py_build/
                 cp "$dylib_path" tmp_py_build/vosk/
+                if [ "$os_name" = "windows" ]; then
+                    find "$(dirname "$dylib_path")" -maxdepth 1 -name "*.dll" -exec cp -f {} tmp_py_build/vosk/ \; 2>/dev/null || true
+                fi
                 (cd tmp_py_build && VOSK_TAG="${VOSK_TAG}" python3 setup.py bdist_wheel --plat-name="${clean_plat}" >/dev/null 2>&1) || true
                 cp tmp_py_build/dist/*.whl "${PKG_DIR}/" 2>/dev/null || true
                 rm -rf tmp_py_build
@@ -289,11 +292,14 @@ package_all() {
             cp -R src/python/vosk/* tmp_os_build/vosk/
             cp src/python/setup.py tmp_os_build/
             found_count=0
-            for dylib_path in $(find "${DIST_DIR}" -name "*.dylib" -o -name "*.so" -o -name "*.dll" 2>/dev/null); do
+            for dylib_path in $(find "${DIST_DIR}" -name "libvosk.dylib" -o -name "libvosk.so" -o -name "libvosk.dll" 2>/dev/null); do
                 if [[ "$dylib_path" == *"${os_sys}"* ]]; then
                     arch_sub=$(basename $(dirname "$dylib_path"))
                     mkdir -p "tmp_os_build/vosk/lib/${os_sys}_${arch_sub}"
                     cp -f "$dylib_path" "tmp_os_build/vosk/lib/${os_sys}_${arch_sub}/"
+                    if [ "$os_sys" = "windows" ]; then
+                        find "$(dirname "$dylib_path")" -maxdepth 1 -name "*.dll" -exec cp -f {} "tmp_os_build/vosk/lib/${os_sys}_${arch_sub}/" \; 2>/dev/null || true
+                    fi
                     found_count=$((found_count + 1))
                 fi
             done
@@ -310,11 +316,14 @@ package_all() {
         rm -rf tmp_all_build && mkdir -p tmp_all_build/vosk/lib
         cp -R src/python/vosk/* tmp_all_build/vosk/
         cp src/python/setup.py tmp_all_build/
-        for dylib_path in $(find "${DIST_DIR}" -name "*.dylib" -o -name "*.so" -o -name "*.dll" 2>/dev/null); do
+        for dylib_path in $(find "${DIST_DIR}" -name "libvosk.dylib" -o -name "libvosk.so" -o -name "libvosk.dll" 2>/dev/null); do
             target_sub=$(basename $(dirname "$dylib_path"))
             os_sub=$(basename $(dirname $(dirname "$dylib_path")))
             mkdir -p "tmp_all_build/vosk/lib/${os_sub}_${target_sub}"
             cp -f "$dylib_path" "tmp_all_build/vosk/lib/${os_sub}_${target_sub}/"
+            if [ "$os_sub" = "windows" ]; then
+                find "$(dirname "$dylib_path")" -maxdepth 1 -name "*.dll" -exec cp -f {} "tmp_all_build/vosk/lib/${os_sub}_${target_sub}/" \; 2>/dev/null || true
+            fi
         done
         (cd tmp_all_build && VOSK_TAG="${VOSK_TAG}" python3 setup.py bdist_wheel --plat-name="any" >/dev/null 2>&1) || true
         cp tmp_all_build/dist/*.whl "${PKG_DIR}/" 2>/dev/null || true
