@@ -213,12 +213,23 @@ jobs:
             }
           }
           
-          & cl.exe /nologo /O2 /I"$incDir" "$testSrc" /link /LIBPATH:"$libDir" libvosk.lib /OUT:"tests\test_e2e.exe"
+          $implib = if (Test-Path "$libDir\libvosk_dll.lib") { "libvosk_dll.lib" } else { "libvosk.lib" }
+          & cl.exe /nologo /MD /O2 /I"$incDir" "$testSrc" /link /LIBPATH:"$libDir" $implib /OUT:"tests\test_e2e.exe"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Test compilation failed with exit code $LASTEXITCODE"
+            exit 1
+          }
           Copy-Item "$libDir\*.dll" "tests\" -Force -ErrorAction SilentlyContinue
-          & "tests\test_e2e.exe" (Resolve-Path $modelDir) (Resolve-Path $wavFile)
+          $testExe = (Resolve-Path "tests\test_e2e.exe").Path
+          & $testExe (Resolve-Path $modelDir) (Resolve-Path $wavFile)
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Test execution failed with exit code $LASTEXITCODE"
+            exit 1
+          }
 
       - name: Upload Target Artifact
         if: |
+          always() &&
           ((github.event_name == 'push') ||
            ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
             (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
