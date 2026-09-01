@@ -185,9 +185,9 @@ function Build-Target-Arch([string]$targetArch) {
         New-Item -ItemType Directory -Path $OpenBLASDir -Force | Out-Null
         
         $blasZip = Join-Path $BuildWorkDir "openblas.zip"
-        $blasUrl = "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.28/openblas-0.3.28-x64.zip"
+        $blasUrl = "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.28/OpenBLAS-0.3.28-x64.zip"
         if ($targetArch -eq "x86") {
-            $blasUrl = "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.28/openblas-0.3.28-x86.zip"
+            $blasUrl = "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.28/OpenBLAS-0.3.28-x86.zip"
         }
         
         Invoke-WebRequest -Uri $blasUrl -OutFile $blasZip -UseBasicParsing
