@@ -183,7 +183,9 @@ function Build-Target-Arch([string]$targetArch) {
     # --------------------------------------------------------------------------
     Write-Host "--> Building OpenFST with CMake..." -ForegroundColor Yellow
     $fstBuild = Join-Path $BuildWorkDir "fst_build"
+    $fstInstall = Join-Path $BuildWorkDir "fst_install"
     New-Item -ItemType Directory -Path $fstBuild -Force | Out-Null
+    New-Item -ItemType Directory -Path $fstInstall -Force | Out-Null
     
     $cmakeArch = switch ($targetArch) {
         "x86_64" { "x64" }
@@ -197,10 +199,11 @@ function Build-Target-Arch([string]$targetArch) {
           -DFST_NO_DYNAMIC_LINKING=ON `
           -DENABLE_LOOKAHEAD_FSTS=ON `
           -DENABLE_NGRAM_FSTS=ON `
+          -DCMAKE_INSTALL_PREFIX="$fstInstall" `
           -DCMAKE_BUILD_TYPE=Release `
           -DCMAKE_CXX_FLAGS="/O2 /Gy /Gw /EHsc /MD /D_CRT_SECURE_NO_WARNINGS"
 
-    cmake --build $fstBuild --config Release --parallel
+    cmake --build $fstBuild --config Release --target install --parallel
 
     # --------------------------------------------------------------------------
     # 3.3 Compile Kaldi Core Inference Modules (Dead-Code Pruning)
@@ -210,10 +213,6 @@ function Build-Target-Arch([string]$targetArch) {
     New-Item -ItemType Directory -Path $kaldiObjDir -Force | Out-Null
 
     $kaldiInclude = "$KaldiDir\src"
-    $fstInclude = "$DepsDir\openfst\src\include"
-    if (-not (Test-Path $fstInclude)) {
-        $fstInclude = "$DepsDir\openfst\openfst\src\include"
-    }
     $blasInclude = "$OpenBLASDir\include"
     $voskInclude = "$VoskApiDir\src"
 
@@ -270,7 +269,10 @@ function Build-Target-Arch([string]$targetArch) {
         "/Dlapack_complex_double=std::complex<double>",
         "/DLAPACK_COMPLEX_CUSTOM=1",
         "/I$kaldiInclude",
-        "/I$fstInclude",
+        "/I$fstInstall\include",
+        "/I$DepsDir\openfst\src\include",
+        "/I$DepsDir\openfst\include",
+        "/I$DepsDir\openfst",
         "/I$blasInclude",
         "/I$voskInclude"
     )
@@ -307,7 +309,7 @@ function Build-Target-Arch([string]$targetArch) {
         Write-Host "--> Packaging static library (libvosk.lib)..." -ForegroundColor Green
         
         $allObjs = Get-ChildItem -Path $kaldiObjDir -Filter "*.obj" | ForEach-Object { $_.FullName }
-        $fstLibs = Get-ChildItem -Path $fstBuild -Recurse -Filter "*.lib" | ForEach-Object { $_.FullName }
+        $fstLibs = Get-ChildItem -Path @($fstInstall, $fstBuild) -Recurse -Filter "*.lib" | ForEach-Object { $_.FullName } | Select-Object -Unique
         $blasLibs = Get-ChildItem -Path "$OpenBLASDir\lib" -Filter "*.lib" | ForEach-Object { $_.FullName }
 
         $staticOut = Join-Path $OutDir "libvosk.lib"
@@ -336,7 +338,7 @@ function Build-Target-Arch([string]$targetArch) {
         
         $dllRspFile = Join-Path $BuildWorkDir "dll_link.rsp"
         $allObjs = Get-ChildItem -Path $kaldiObjDir -Filter "*.obj" | ForEach-Object { $_.FullName }
-        $fstLibs = Get-ChildItem -Path $fstBuild -Recurse -Filter "*.lib" | ForEach-Object { $_.FullName }
+        $fstLibs = Get-ChildItem -Path @($fstInstall, $fstBuild) -Recurse -Filter "*.lib" | ForEach-Object { $_.FullName } | Select-Object -Unique
         $blasLibs = Get-ChildItem -Path "$OpenBLASDir\lib" -Filter "*.lib" | ForEach-Object { $_.FullName }
 
         $dllRspLines = @(
