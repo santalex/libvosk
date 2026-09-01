@@ -29,30 +29,51 @@ failed = 0
 def check_file(filename):
     global passed, failed
     filepath = os.path.join(pkg_dir, filename)
-    print(f"\n📄 Checking [{filename}] ({os.path.getsize(filepath) / 1024 / 1024:.2f} MB)...")
+    file_size_mb = os.path.getsize(filepath) / 1024 / 1024
+    print(f"\n📄 Checking [{filename}] ({file_size_mb:.2f} MB)...")
     
     try:
         with zipfile.ZipFile(filepath, 'r') as z:
             namelist = z.namelist()
+            infolist = z.infolist()
             print(f"   Contents ({len(namelist)} items):")
-            # 完整展示内部所有文件明细，不隐藏
-            for name in namelist:
-                print(f"     - {name}")
+            for info in infolist:
+                size_str = f"{info.file_size / 1024:.1f} KB" if info.file_size < 1024 * 1024 else f"{info.file_size / 1024 / 1024:.2f} MB"
+                print(f"     - {info.filename} ({size_str})")
             
             # Validation rules
             is_valid = True
             reasons = []
 
+            # 1. 基础完整性检查：杜绝 0 字节损坏文件
+            for info in infolist:
+                if not info.filename.endswith("/") and info.file_size == 0:
+                    is_valid = False
+                    reasons.append(f"Empty 0-byte file found: {info.filename}")
+
+            is_windows = "win" in filename.lower()
+
             if filename.endswith(".zip"):
                 if "-shared.zip" in filename:
-                    has_dyn = any(name.endswith(('.so', '.dylib', '.dll', '.lib')) for name in namelist)
+                    has_dyn = any(name.endswith(('.so', '.dylib', '.dll')) for name in namelist)
                     has_hdr = any("vosk_api.h" in name for name in namelist)
                     if not has_dyn:
                         is_valid = False
-                        reasons.append("Missing dynamic library (.so/.dylib/.dll/.lib)")
+                        reasons.append("Missing dynamic library (.so/.dylib/.dll)")
                     if not has_hdr:
                         is_valid = False
                         reasons.append("Missing header (vosk_api.h)")
+                    
+                    # Windows 平台动态包专属规则：必须附带 libopenblas.dll
+                    if is_windows:
+                        has_openblas = any("libopenblas.dll" in name for name in namelist)
+                        has_implib = any(name.endswith(".lib") for name in namelist)
+                        if not has_openblas:
+                            is_valid = False
+                            reasons.append("Missing Windows math runtime dependency: libopenblas.dll")
+                        if not has_implib:
+                            is_valid = False
+                            reasons.append("Missing MSVC import library (.lib)")
 
                 elif "-static.zip" in filename:
                     has_stat = any(name.endswith(('.a', '.lib')) for name in namelist)
@@ -66,9 +87,13 @@ def check_file(filename):
 
                 elif "-xcframework.zip" in filename:
                     has_xcf = any(".xcframework" in name for name in namelist)
+                    has_plist = any("Info.plist" in name for name in namelist)
                     if not has_xcf:
                         is_valid = False
                         reasons.append("Missing .xcframework bundle")
+                    if not has_plist:
+                        is_valid = False
+                        reasons.append("Missing Info.plist in XCFramework")
 
             elif filename.endswith(".whl"):
                 has_init = any("vosk/__init__.py" in name for name in namelist)
@@ -79,6 +104,13 @@ def check_file(filename):
                 if not has_lib:
                     is_valid = False
                     reasons.append("Missing dynamic library in wheel")
+                
+                # Windows Python Wheel 专属规则：必须打包 libopenblas.dll
+                if is_windows:
+                    has_openblas = any("libopenblas.dll" in name for name in namelist)
+                    if not has_openblas:
+                        is_valid = False
+                        reasons.append("Missing Windows math runtime dependency in wheel: libopenblas.dll")
 
             if is_valid:
                 print(f"   ✅ VERIFIED: OK!")
@@ -100,3 +132,4 @@ print("=" * 80)
 
 if failed > 0:
     sys.exit(1)
+
