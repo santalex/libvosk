@@ -164,12 +164,22 @@ function Prepare-Dependencies {
         git clone -b v3.2.1 --single-branch --depth=1 https://github.com/alphacep/clapack $clapackDir
     }
 
-    # Patch CLAPACK libf2c CMakeLists.txt to always use static arith.h without running host binary
+    # Patch CLAPACK libf2c CMakeLists.txt to always write a static arith.h,
+    # bypassing arithchk.exe which cannot run as an ARM64 binary on x64 hosts.
     $f2cCMake = Join-Path "$clapackDir\F2CLIBS\libf2c" "CMakeLists.txt"
     if (Test-Path $f2cCMake) {
         $content = Get-Content -Raw $f2cCMake
-        $content = $content -replace 'if\(CMAKE_CROSSCOMPILING\)', 'if(TRUE)'
+        # Replace the entire if/else/endif block that generates arith.h with a
+        # simple file(WRITE) that produces a known-good arith.h for all Windows targets.
+        # The regex replaces from 'if(CMAKE_CROSSCOMPILING)' to the matching 'endif()'
+        $arithBlock = @'
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/arith.h
+"#define IEEE_8087\n#define Arith_Kind_ASL 1\n#define Double_Align\n")
+'@
+        # Remove the old if/else/endif that references arithchk
+        $content = $content -replace '(?s)if\(CMAKE_CROSSCOMPILING\).+?endif\(\)', $arithBlock
         Set-Content -Path $f2cCMake -Value $content -Encoding UTF8
+        Write-Host "--> Patched CLAPACK libf2c/CMakeLists.txt to use static arith.h" -ForegroundColor Green
     }
 }
 
@@ -206,17 +216,20 @@ function Build-Target-Arch([string]$targetArch) {
         Copy-Item -Path "$KaldiDir\tools\CLAPACK\cblas.h" -Destination "$ClapackDir\INCLUDE\cblas.h" -Force
     }
 
-    # Pre-generate arith.h so CMake/f2c does not attempt to run cross-compiled executables on host
-    $f2cArithH = Join-Path $ClapackDir "F2CLIBS\libf2c\arith.h"
-    "#define IEEE_8087`n#define Arith_Kind_ASL 1`n#define Double_Align`n#define X64_bit_pointers`n" | Set-Content -Path $f2cArithH -Encoding ASCII
-
     if (-not (Test-Path $lapackLib) -or -not (Test-Path $blasLib)) {
         Write-Host "--> Compiling CLAPACK with MSVC for $targetArch..." -ForegroundColor Yellow
         New-Item -ItemType Directory -Path $clapackBuildDir -Force | Out-Null
+
+        # Pre-seed arith.h in the CMake binary output dir before cmake runs,
+        # so the ADD_CUSTOM_COMMAND target is already satisfied on first configure.
+        $f2cBinDir = Join-Path $clapackBuildDir "F2CLIBS\libf2c"
+        New-Item -ItemType Directory -Path $f2cBinDir -Force | Out-Null
+        $arithContent = "#define IEEE_8087`n#define Arith_Kind_ASL 1`n#define Double_Align`n"
+        Set-Content -Path (Join-Path $f2cBinDir "arith.h") -Value $arithContent -Encoding ASCII
         
         $cmakeArch = if ($targetArch -eq "x86_64") { "x64" } elseif ($targetArch -eq "arm64") { "ARM64" } else { "Win32" }
         
-        & cmake.exe -S $ClapackDir -B $clapackBuildDir -A $cmakeArch -DCMAKE_BUILD_TYPE=Release -DCMAKE_CROSSCOMPILING=True -DARITH_H="$f2cArithH"
+        & cmake.exe -S $ClapackDir -B $clapackBuildDir -A $cmakeArch -DCMAKE_BUILD_TYPE=Release
         if ($LASTEXITCODE -ne 0) {
             Write-Error "CLAPACK CMake configure failed with exit code $LASTEXITCODE"
             exit 1
