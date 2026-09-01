@@ -144,6 +144,7 @@ static int test_grammar_constraint(VoskModel* model, const char* wav_path) {
     const char* grammar_json_2 = "[\"zero one eight zero three\", \"hello world\", \"[unk]\"]";
     printf("    --> 动态热重设语法: %s\n", grammar_json_2);
     vosk_recognizer_set_grm(recognizer, grammar_json_2);
+    vosk_recognizer_reset(recognizer);
 
     fp = fopen(wav_path, "rb");
     ASSERT_NOT_NULL(fp, "Failed to re-open WAV audio file for dynamic grammar test");
