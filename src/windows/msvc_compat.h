@@ -60,14 +60,41 @@ inline int __builtin_ctz(unsigned int x) {
 #undef CONST
 #endif
 
-// Direct OpenBLAS LAPACK function mappings for Kaldi matrix cblas-wrappers (with Fortran string lengths)
-#define stptri_(uplo, diag, n, ap, info) LAPACK_stptri(uplo, diag, n, ap, info, 1, 1)
-#define dtptri_(uplo, diag, n, ap, info) LAPACK_dtptri(uplo, diag, n, ap, info, 1, 1)
-#define ssptrf_(uplo, n, ap, ipiv, info) LAPACK_ssptrf(uplo, n, ap, ipiv, info, 1)
-#define dsptrf_(uplo, n, ap, ipiv, info) LAPACK_dsptrf(uplo, n, ap, ipiv, info, 1)
-#define ssptri_(uplo, n, ap, ipiv, work, info) LAPACK_ssptri(uplo, n, ap, ipiv, work, info, 1)
-#define dsptri_(uplo, n, ap, ipiv, work, info) LAPACK_dsptri(uplo, n, ap, ipiv, work, info, 1)
-#define sgesvd_(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info) LAPACK_sgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info, 1, 1)
-#define dgesvd_(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info) LAPACK_dgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info, 1, 1)
+// Direct OpenBLAS LAPACK function bridges for Kaldi matrix cblas-wrappers
+extern "C" {
+    int LAPACK_ssptrf(char const* uplo, int const* n, float* ap, int* ipiv, int* info, size_t uplo_len);
+    int LAPACK_dsptrf(char const* uplo, int const* n, double* ap, int* ipiv, int* info, size_t uplo_len);
+    int LAPACK_ssptri(char const* uplo, int const* n, float* ap, int* ipiv, float* work, int* info, size_t uplo_len);
+    int LAPACK_dsptri(char const* uplo, int const* n, double* ap, int* ipiv, double* work, int* info, size_t uplo_len);
+    int LAPACK_stptri(char const* uplo, char const* diag, int const* n, float* ap, int* info, size_t uplo_len, size_t diag_len);
+    int LAPACK_dtptri(char const* uplo, char const* diag, int const* n, double* ap, int* info, size_t uplo_len, size_t diag_len);
+    int LAPACK_sgesvd(char const* jobu, char const* jobvt, int const* m, int const* n, float* a, int const* lda, float* s, float* u, int const* ldu, float* vt, int const* ldvt, float* work, int const* lwork, int* info, size_t jobu_len, size_t jobvt_len);
+    int LAPACK_dgesvd(char const* jobu, char const* jobvt, int const* m, int const* n, double* a, int const* lda, double* s, double* u, int const* ldu, double* vt, int const* ldvt, double* work, int const* lwork, int* info, size_t jobu_len, size_t jobvt_len);
+
+    inline void ssptrf_(char *uplo, int *n, float *ap, int *ipiv, int *info) {
+        LAPACK_ssptrf(uplo, n, ap, ipiv, info, 1);
+    }
+    inline void dsptrf_(char *uplo, int *n, double *ap, int *ipiv, int *info) {
+        LAPACK_dsptrf(uplo, n, ap, ipiv, info, 1);
+    }
+    inline void ssptri_(char *uplo, int *n, float *ap, int *ipiv, float *work, int *info) {
+        LAPACK_ssptri(uplo, n, ap, ipiv, work, info, 1);
+    }
+    inline void dsptri_(char *uplo, int *n, double *ap, int *ipiv, double *work, int *info) {
+        LAPACK_dsptri(uplo, n, ap, ipiv, work, info, 1);
+    }
+    inline void stptri_(char *uplo, char *diag, int *n, float *ap, int *info) {
+        LAPACK_stptri(uplo, diag, n, ap, info, 1, 1);
+    }
+    inline void dtptri_(char *uplo, char *diag, int *n, double *ap, int *info) {
+        LAPACK_dtptri(uplo, diag, n, ap, info, 1, 1);
+    }
+    inline void sgesvd_(char *jobu, char *jobvt, int *m, int *n, float *a, int *lda, float *s, float *u, int *ldu, float *vt, int *ldvt, float *work, int *lwork, int *info) {
+        LAPACK_sgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info, 1, 1);
+    }
+    inline void dgesvd_(char *jobu, char *jobvt, int *m, int *n, double *a, int *lda, double *s, double *u, int *ldu, double *vt, int *ldvt, double *work, int *lwork, int *info) {
+        LAPACK_dgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info, 1, 1);
+    }
+}
 
 #endif
