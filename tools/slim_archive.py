@@ -191,6 +191,14 @@ def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_to
         else:
             # 分批或直接传入 ar
             subprocess.run([ar_tool, "rcs", str(output_path)] + kept_obj_paths, check=True)
+            try:
+                if sys.platform == "darwin":
+                    subprocess.run(["strip", "-S", str(output_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                    subprocess.run(["ranlib", "-no_warning_for_no_symbols", "-c", str(output_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                else:
+                    subprocess.run(["strip", "--strip-debug", str(output_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            except Exception:
+                pass
 
         new_size_mb = output_path.stat().st_size / (1024 * 1024)
         savings_pct = (1.0 - (new_size_mb / orig_size_mb)) * 100.0

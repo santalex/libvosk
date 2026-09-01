@@ -189,11 +189,17 @@ archive_static_lib() {
         "${KALDI_ROOT}/tools/openfst-1.8.0/lib/libfst.a" \
         "${KALDI_ROOT}/tools/openfst-1.8.0/lib/libfstngram.a"
 
+    # 自动执行传递闭包瘦身与调试符号安全剥离 (360MB ➔ ~24MB)
+    local SLIM_TOOL="${SCRIPT_DIR}/../../tools/slim_archive.py"
+    if [ -f "${SLIM_TOOL}" ]; then
+        python3 "${SLIM_TOOL}" "${OUT_DIR}/libvosk.a" "${OUT_DIR}/libvosk.a" --header "${SCRIPT_DIR}/vosk-api/src/vosk_api.h" 2>/dev/null || true
+    fi
+    strip -S "${OUT_DIR}/libvosk.a" 2>/dev/null || true
     ranlib -no_warning_for_no_symbols -c "${OUT_DIR}/libvosk.a" 2>/dev/null || ranlib "${OUT_DIR}/libvosk.a" 2>/dev/null || true
 
     cp -fv "${SCRIPT_DIR}/vosk-api/src/vosk_api.h" "${OUT_DIR}/vosk_api.h" 2>/dev/null || true
     local LIB_SIZE=$(du -sh "${OUT_DIR}/libvosk.a" | cut -f1)
-    echo "✔ 静态库打包完成: ${OUT_DIR}/libvosk.a (${LIB_SIZE})"
+    echo "✔ 极小化静态库打包完成: ${OUT_DIR}/libvosk.a (${LIB_SIZE})"
 }
 
 # ------------------------------------------------------------------------------
