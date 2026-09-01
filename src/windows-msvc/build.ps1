@@ -405,10 +405,6 @@ function Build-Target-Arch([string]$targetArch) {
         $voskCcFiles += "$VoskApiDir\src\postprocessor.cc"
     }
 
-    $cblasImpl = Join-Path $ScriptDir "cblas_impl.c"
-    if (Test-Path $cblasImpl) {
-        $voskCcFiles += $cblasImpl
-    }
 
     $voskObjDir = Join-Path $kaldiObjDir "vosk"
     New-Item -ItemType Directory -Path $voskObjDir -Force | Out-Null
@@ -418,6 +414,20 @@ function Build-Target-Arch([string]$targetArch) {
         if ($LASTEXITCODE -ne 0) {
             Write-Error "Vosk API compilation failed with exit code $LASTEXITCODE"
             exit 1
+        }
+
+        # Compile cblas_impl.c separately in C mode (/TC) — the C++ flags
+        # used above trigger STL1003 when applied to a plain C file.
+        $cblasImpl = Join-Path $ScriptDir "cblas_impl.c"
+        if (Test-Path $cblasImpl) {
+            Write-Host "--> Compiling cblas_impl.c (C mode)..." -ForegroundColor Yellow
+            # Build a C-mode flag set: same includes/defines but without /EHsc and with /TC
+            $clCArgs = $clArgs | Where-Object { $_ -ne "/EHsc" }
+            & cl.exe /TC $clCArgs $cblasImpl
+            if ($LASTEXITCODE -ne 0) {
+                Write-Error "cblas_impl.c compilation failed with exit code $LASTEXITCODE"
+                exit 1
+            }
         }
     } finally {
         Pop-Location
