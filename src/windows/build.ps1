@@ -112,13 +112,13 @@ function Prepare-Dependencies {
     $kaldiDir = Join-Path $DepsDir "kaldi"
     $voskDir = Join-Path $DepsDir "vosk-api"
 
-    # A. OpenFST (CMake & MSVC Compatible Port)
+    # A. OpenFST (Official Google Research CMake Repository)
     if (-not (Test-Path (Join-Path $openfstDir "CMakeLists.txt"))) {
-        Write-Host "--> Cloning OpenFST repository (k2-fsa CMake port)..." -ForegroundColor Yellow
+        Write-Host "--> Cloning OpenFST repository (google-research/openfst)..." -ForegroundColor Yellow
         if (Test-Path $openfstDir) {
             Remove-Item -Recurse -Force $openfstDir -ErrorAction SilentlyContinue
         }
-        git clone --depth=1 https://github.com/k2-fsa/openfst $openfstDir
+        git clone --depth=1 https://github.com/google-research/openfst $openfstDir
     }
 
     # B. Kaldi (Vosk Fork)
