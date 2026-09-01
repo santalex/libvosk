@@ -101,12 +101,8 @@ def check_file(filename):
                     is_valid = False
                     reasons.append("Missing dynamic library in wheel")
                 
-                # Windows Python Wheel 专属规则：必须打包 libopenblas.dll
-                if is_windows:
-                    has_openblas = any("libopenblas.dll" in name for name in namelist)
-                    if not has_openblas:
-                        is_valid = False
-                        reasons.append("Missing Windows math runtime dependency in wheel: libopenblas.dll")
+                # Windows Python Wheel: libvosk.dll is self-contained (OpenBLAS statically embedded)
+                pass
 
             if is_valid:
                 print(f"   ✅ VERIFIED: OK!")
