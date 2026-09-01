@@ -460,17 +460,22 @@ function Build-Target-Arch([string]$targetArch) {
         $dllOut = Join-Path $OutDir "libvosk.dll"
         $implibOut = if ($LinkType -eq "all") { Join-Path $OutDir "libvosk_dll.lib" } else { Join-Path $OutDir "libvosk.lib" }
         
+        $defFile = Join-Path $ScriptDir "libvosk.def"
+        $defArg = if (Test-Path $defFile) { "/DEF:$defFile" } else { "" }
+
         $dllRspFile = Join-Path $BuildWorkDir "dll_link.rsp"
         $dllRspLines = @(
             "/NOLOGO",
             "/DLL",
             "/OPT:REF,ICF",
+            $defArg,
             "/OUT:$dllOut",
             "/IMPLIB:$implibOut",
             "ws2_32.lib",
             "advapi32.lib",
             "userenv.lib"
-        ) + $allObjs + $fstLibs + $mathLibs
+        ) | Where-Object { $_ -ne "" }
+        $dllRspLines += $allObjs + $fstLibs + $mathLibs
         
         [System.IO.File]::WriteAllLines($dllRspFile, $dllRspLines)
 
