@@ -12,9 +12,9 @@ src/apple/build/
 
 # Test Cache & Artifacts
 tests/model/
-tests/*.wav
-tests/*.zip
-tests/test_e2e_runner*
+tests/test_e2e_*
+!tests/test.wav
+!tests/model.zip
 
 # OS / Editor Junk Files
 .DS_Store

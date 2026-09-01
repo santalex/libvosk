@@ -193,10 +193,14 @@ jobs:
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/alphacep/vosk-api/master/python/example/test.wav" -OutFile $wavFile -UseBasicParsing
           }
           if (-not (Test-Path "$modelDir\am\final.mdl")) {
-            Invoke-WebRequest -Uri "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip" -OutFile "tests\model.zip" -UseBasicParsing
-            Expand-Archive -Path "tests\model.zip" -DestinationPath "tests\model_tmp" -Force
-            Move-Item "tests\model_tmp\vosk-model-small-en-us-0.15" $modelDir -Force
-            Remove-Item "tests\model.zip", "tests\model_tmp" -Recurse -Force
+            if (Test-Path "tests\model.zip") {
+              Expand-Archive -Path "tests\model.zip" -DestinationPath "tests" -Force
+            } else {
+              Invoke-WebRequest -Uri "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip" -OutFile "tests\model.zip" -UseBasicParsing
+              Expand-Archive -Path "tests\model.zip" -DestinationPath "tests\model_tmp" -Force
+              Move-Item "tests\model_tmp\vosk-model-small-en-us-0.15" $modelDir -Force
+              Remove-Item "tests\model_tmp" -Recurse -Force
+            }
           }
           
           & cl.exe /nologo /O2 /I"$incDir" "$testSrc" /link /LIBPATH:"$libDir" libvosk.lib /OUT:"tests\test_e2e.exe"
