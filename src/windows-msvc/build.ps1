@@ -204,8 +204,9 @@ function Build-Target-Arch([string]$targetArch) {
         New-Item -ItemType Directory -Path $clapackBuildDir -Force | Out-Null
         
         $cmakeArch = if ($targetArch -eq "x86_64") { "x64" } elseif ($targetArch -eq "arm64") { "ARM64" } else { "Win32" }
+        $cmakeExtra = if ($targetArch -eq "arm64") { @("-DARITH_H=$f2cArithH", "-DCMAKE_CROSSCOMPILING=True") } else { @() }
         
-        & cmake.exe -S $ClapackDir -B $clapackBuildDir -A $cmakeArch -DCMAKE_BUILD_TYPE=Release
+        & cmake.exe -S $ClapackDir -B $clapackBuildDir -A $cmakeArch -DCMAKE_BUILD_TYPE=Release @cmakeExtra
         if ($LASTEXITCODE -ne 0) {
             Write-Error "CLAPACK CMake configure failed with exit code $LASTEXITCODE"
             exit 1
