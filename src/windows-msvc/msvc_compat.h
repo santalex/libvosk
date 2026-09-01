@@ -12,10 +12,58 @@
 #include <intrin.h>
 #include <cstdint>
 #include <cstddef>
+#include <cctype>
+#include <cwctype>
+#include <algorithm>
+#include <cmath>
 #include <string_view>
 
 #ifndef ssize_t
 typedef intptr_t ssize_t;
+#endif
+
+// Undefine any macro pollution that could break C++ standard library
+#ifdef isalnum
+#undef isalnum
+#endif
+#ifdef isalpha
+#undef isalpha
+#endif
+#ifdef iscntrl
+#undef iscntrl
+#endif
+#ifdef isdigit
+#undef isdigit
+#endif
+#ifdef isgraph
+#undef isgraph
+#endif
+#ifdef islower
+#undef islower
+#endif
+#ifdef isprint
+#undef isprint
+#endif
+#ifdef ispunct
+#undef ispunct
+#endif
+#ifdef isspace
+#undef isspace
+#endif
+#ifdef isupper
+#undef isupper
+#endif
+#ifdef isxdigit
+#undef isxdigit
+#endif
+#ifdef tolower
+#undef tolower
+#endif
+#ifdef toupper
+#undef toupper
+#endif
+#ifdef isblank
+#undef isblank
 #endif
 
 // GCC/Clang built-ins fallback for MSVC

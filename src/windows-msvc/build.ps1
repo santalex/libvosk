@@ -193,6 +193,12 @@ function Build-Target-Arch([string]$targetArch) {
     $lapackLib = Join-Path $clapackBuildDir "SRC\Release\lapack.lib"
     $blasLib = Join-Path $clapackBuildDir "BLAS\SRC\Release\blas.lib"
 
+    # Pre-generate arith.h so CMake/f2c does not attempt to run cross-compiled executables on host
+    $f2cArithH = Join-Path $ClapackDir "F2CLIBS\libf2c\arith.h"
+    if (-not (Test-Path $f2cArithH)) {
+        "#define IEEE_8087`n#define Arith_Kind_ASL 1`n#define Double_Align`n#define X64_bit_pointers`n" | Set-Content -Path $f2cArithH -Encoding ASCII
+    }
+
     if (-not (Test-Path $lapackLib) -or -not (Test-Path $blasLib)) {
         Write-Host "--> Compiling CLAPACK with MSVC for $targetArch..." -ForegroundColor Yellow
         New-Item -ItemType Directory -Path $clapackBuildDir -Force | Out-Null
@@ -323,9 +329,7 @@ function Build-Target-Arch([string]$targetArch) {
         "/I$KaldiDir\src",
         "/I$fstInclude",
         "/I$ClapackDir\INCLUDE",
-        "/I$ClapackDir\SRC",
-        "/I$ClapackDir\BLAS\SRC",
-        "/I$ClapackDir\F2CLIBS\libf2c",
+        "/I$ClapackDir\BLAS\WRAP",
         "/I$VoskApiDir\src"
     )
 
