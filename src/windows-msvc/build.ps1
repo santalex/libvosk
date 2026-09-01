@@ -163,6 +163,14 @@ function Prepare-Dependencies {
         }
         git clone -b v3.2.1 --single-branch --depth=1 https://github.com/alphacep/clapack $clapackDir
     }
+
+    # Patch CLAPACK libf2c CMakeLists.txt to always use static arith.h without running host binary
+    $f2cCMake = Join-Path "$clapackDir\F2CLIBS\libf2c" "CMakeLists.txt"
+    if (Test-Path $f2cCMake) {
+        $content = Get-Content -Raw $f2cCMake
+        $content = $content -replace 'if\(CMAKE_CROSSCOMPILING\)', 'if(TRUE)'
+        Set-Content -Path $f2cCMake -Value $content -Encoding UTF8
+    }
 }
 
 # ------------------------------------------------------------------------------
