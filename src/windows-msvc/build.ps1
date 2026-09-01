@@ -193,20 +193,22 @@ function Build-Target-Arch([string]$targetArch) {
     $lapackLib = Join-Path $clapackBuildDir "SRC\Release\lapack.lib"
     $blasLib = Join-Path $clapackBuildDir "BLAS\SRC\Release\blas.lib"
 
+    # Copy Kaldi's cblas.h into ClapackDir\INCLUDE
+    if (Test-Path "$KaldiDir\tools\CLAPACK\cblas.h") {
+        Copy-Item -Path "$KaldiDir\tools\CLAPACK\cblas.h" -Destination "$ClapackDir\INCLUDE\cblas.h" -Force
+    }
+
     # Pre-generate arith.h so CMake/f2c does not attempt to run cross-compiled executables on host
     $f2cArithH = Join-Path $ClapackDir "F2CLIBS\libf2c\arith.h"
-    if (-not (Test-Path $f2cArithH)) {
-        "#define IEEE_8087`n#define Arith_Kind_ASL 1`n#define Double_Align`n#define X64_bit_pointers`n" | Set-Content -Path $f2cArithH -Encoding ASCII
-    }
+    "#define IEEE_8087`n#define Arith_Kind_ASL 1`n#define Double_Align`n#define X64_bit_pointers`n" | Set-Content -Path $f2cArithH -Encoding ASCII
 
     if (-not (Test-Path $lapackLib) -or -not (Test-Path $blasLib)) {
         Write-Host "--> Compiling CLAPACK with MSVC for $targetArch..." -ForegroundColor Yellow
         New-Item -ItemType Directory -Path $clapackBuildDir -Force | Out-Null
         
         $cmakeArch = if ($targetArch -eq "x86_64") { "x64" } elseif ($targetArch -eq "arm64") { "ARM64" } else { "Win32" }
-        $cmakeExtra = if ($targetArch -eq "arm64") { @("-DARITH_H=$f2cArithH", "-DCMAKE_CROSSCOMPILING=True") } else { @() }
         
-        & cmake.exe -S $ClapackDir -B $clapackBuildDir -A $cmakeArch -DCMAKE_BUILD_TYPE=Release @cmakeExtra
+        & cmake.exe -S $ClapackDir -B $clapackBuildDir -A $cmakeArch -DCMAKE_BUILD_TYPE=Release -DCMAKE_CROSSCOMPILING=True -DARITH_H="$f2cArithH"
         if ($LASTEXITCODE -ne 0) {
             Write-Error "CLAPACK CMake configure failed with exit code $LASTEXITCODE"
             exit 1
@@ -329,8 +331,8 @@ function Build-Target-Arch([string]$targetArch) {
         "/FI$compatHeader",
         "/I$KaldiDir\src",
         "/I$fstInclude",
+        "/I$KaldiDir\tools\CLAPACK",
         "/I$ClapackDir\INCLUDE",
-        "/I$ClapackDir\BLAS\WRAP",
         "/I$VoskApiDir\src"
     )
 
