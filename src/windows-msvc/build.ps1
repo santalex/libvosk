@@ -166,20 +166,12 @@ function Prepare-Dependencies {
 
     # Patch CLAPACK libf2c CMakeLists.txt to always write a static arith.h,
     # bypassing arithchk.exe which cannot run as an ARM64 binary on x64 hosts.
+    # We copy a pre-patched version from the repo instead of using fragile text replacement.
     $f2cCMake = Join-Path "$clapackDir\F2CLIBS\libf2c" "CMakeLists.txt"
-    if (Test-Path $f2cCMake) {
-        $content = Get-Content -Raw $f2cCMake
-        # Replace the entire if/else/endif block that generates arith.h with a
-        # simple file(WRITE) that produces a known-good arith.h for all Windows targets.
-        # The regex replaces from 'if(CMAKE_CROSSCOMPILING)' to the matching 'endif()'
-        $arithBlock = @'
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/arith.h
-"#define IEEE_8087\n#define Arith_Kind_ASL 1\n#define Double_Align\n")
-'@
-        # Remove the old if/else/endif that references arithchk
-        $content = $content -replace '(?s)if\(CMAKE_CROSSCOMPILING\).+?endif\(\)', $arithBlock
-        Set-Content -Path $f2cCMake -Value $content -Encoding UTF8
-        Write-Host "--> Patched CLAPACK libf2c/CMakeLists.txt to use static arith.h" -ForegroundColor Green
+    $patchedCMake = Join-Path $ScriptDir "clapack_libf2c_CMakeLists.txt"
+    if ((Test-Path $f2cCMake) -and (Test-Path $patchedCMake)) {
+        Copy-Item -Path $patchedCMake -Destination $f2cCMake -Force
+        Write-Host "--> Patched CLAPACK libf2c/CMakeLists.txt (arithchk bypassed)" -ForegroundColor Green
     }
 }
 
