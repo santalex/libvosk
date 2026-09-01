@@ -118,10 +118,11 @@ static int test_streaming_recognition(VoskModel* model, const char* wav_path) {
  * 模块 3: 动态语法约束识别测试 (Grammar Constraint)
  */
 static int test_grammar_constraint(VoskModel* model, const char* wav_path) {
-    printf("\n--> [Test 3/4] 测试动态受限语法识别 (Grammar Constraint)...\n");
+    printf("\n--> [Test 3/4] 测试动态受限语法识别与实时重设 (Grammar Constraint & vosk_recognizer_set_grm)...\n");
 
-    const char* grammar_json = "[\"zero\", \"one\", \"two\", \"three\", \"four\", \"five\", \"six\", \"seven\", \"eight\", \"nine\", \"[unk]\"]";
-    VoskRecognizer* recognizer = vosk_recognizer_new_grm(model, 16000.0f, grammar_json);
+    // Phase 1: 单词列表语法初始化 (vosk_recognizer_new_grm)
+    const char* grammar_json_1 = "[\"zero\", \"one\", \"two\", \"three\", \"four\", \"five\", \"six\", \"seven\", \"eight\", \"nine\", \"[unk]\"]";
+    VoskRecognizer* recognizer = vosk_recognizer_new_grm(model, 16000.0f, grammar_json_1);
     ASSERT_NOT_NULL(recognizer, "vosk_recognizer_new_grm failed");
 
     FILE* fp = fopen(wav_path, "rb");
@@ -135,12 +136,30 @@ static int test_grammar_constraint(VoskModel* model, const char* wav_path) {
     }
     fclose(fp);
 
-    const char* final_json = vosk_recognizer_final_result(recognizer);
-    ASSERT_NOT_NULL(final_json, "vosk_recognizer_final_result returned NULL in grammar mode");
-    printf("    受限语法识别输出 JSON: %s\n", final_json);
+    const char* final_json_1 = vosk_recognizer_final_result(recognizer);
+    ASSERT_NOT_NULL(final_json_1, "vosk_recognizer_final_result returned NULL in grammar mode");
+    printf("    [Phase 1] 单词级受限语法识别输出: %s\n", final_json_1);
+
+    // Phase 2: 动态热切换短语级语法 (vosk_recognizer_set_grm)
+    const char* grammar_json_2 = "[\"zero one eight zero three\", \"hello world\", \"[unk]\"]";
+    printf("    --> 动态热重设语法: %s\n", grammar_json_2);
+    vosk_recognizer_set_grm(recognizer, grammar_json_2);
+
+    fp = fopen(wav_path, "rb");
+    ASSERT_NOT_NULL(fp, "Failed to re-open WAV audio file for dynamic grammar test");
+    fseek(fp, 44, SEEK_SET);
+    while ((bytes_read = fread(pcm_buffer, 1, sizeof(pcm_buffer), fp)) > 0) {
+        vosk_recognizer_accept_waveform(recognizer, pcm_buffer, (int)bytes_read);
+    }
+    fclose(fp);
+
+    const char* final_json_2 = vosk_recognizer_final_result(recognizer);
+    ASSERT_NOT_NULL(final_json_2, "vosk_recognizer_final_result returned NULL after set_grm");
+    printf("    [Phase 2] 短语级热切换受限语法识别输出: %s\n", final_json_2);
+    ASSERT_TRUE(strstr(final_json_2, "zero one eight zero three") != NULL, "Dynamic phrase grammar must match audio content");
 
     vosk_recognizer_free(recognizer);
-    printf("%s 动态语法约束识别测试通过！\n", TEST_PASS_BANNER);
+    printf("%s 动态语法编译、解码与实时热重设测试通过！\n", TEST_PASS_BANNER);
     return 1;
 }
 
