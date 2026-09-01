@@ -122,7 +122,7 @@ compile_openfst() {
 
     make -j$(sysctl -n hw.ncpu) openfst \
         OPENFST_CONFIGURE="${HOST_FLAGS} --enable-static --enable-shared --enable-far --enable-ngram-fsts --enable-lookahead-fsts --with-pic" \
-        CXXFLAGS="-O3 ${ARCH_FLAGS}" CFLAGS="-O3 ${ARCH_FLAGS}" LDFLAGS="${ARCH_FLAGS}"
+        CXXFLAGS="-O3 -DNDEBUG -g0 -ffunction-sections -fdata-sections ${ARCH_FLAGS}" CFLAGS="-O3 -DNDEBUG -g0 -ffunction-sections -fdata-sections ${ARCH_FLAGS}" LDFLAGS="${ARCH_FLAGS}"
 }
 
 # ------------------------------------------------------------------------------
@@ -144,6 +144,8 @@ compile_kaldi() {
 
     if [ -f kaldi.mk ]; then
         sed -i '' 's/-msse -msse2//g' kaldi.mk
+        sed -i '' 's/-g //g' kaldi.mk
+        sed -i '' 's/-O1/-O3 -DNDEBUG -g0 -ffunction-sections -fdata-sections/g' kaldi.mk
     fi
     make depend -j$(sysctl -n hw.ncpu)
     CXXFLAGS="${ARCH_FLAGS}" CFLAGS="${ARCH_FLAGS}" LDFLAGS="${ARCH_FLAGS}" \
@@ -151,7 +153,7 @@ compile_kaldi() {
 }
 
 # ------------------------------------------------------------------------------
-# 内部 Helper 函数: 静态库 libtool 归档
+# 内部 Helper 函数: 静态库 libtool 归档与瘦身剥离
 # ------------------------------------------------------------------------------
 archive_static_lib() {
     local OUT_DIR=$1
@@ -159,11 +161,17 @@ archive_static_lib() {
 
     mkdir -p "${OUT_DIR}"
 
+    echo "--> 正在合并归档静态库并剥离调试符号 (Dead-Code & Debug Symbol Stripping)..."
     /usr/bin/libtool -static -o "${OUT_DIR}/libvosk.a" \
         *.o \
         "${KALDI_ROOT}/src/online2/kaldi-online2.a" \
         "${KALDI_ROOT}/src/decoder/kaldi-decoder.a" \
         "${KALDI_ROOT}/src/ivector/kaldi-ivector.a" \
+        "${KALDI_ROOT}/src/cudamatrix/kaldi-cudamatrix.a" \
+        "${KALDI_ROOT}/src/transform/kaldi-transform.a" \
+        "${KALDI_ROOT}/src/chain/kaldi-chain.a" \
+        "${KALDI_ROOT}/src/nnet2/kaldi-nnet2.a" \
+        "${KALDI_ROOT}/src/nnet3/kaldi-nnet3.a" \
         "${KALDI_ROOT}/src/gmm/kaldi-gmm.a" \
         "${KALDI_ROOT}/src/tree/kaldi-tree.a" \
         "${KALDI_ROOT}/src/feat/kaldi-feat.a" \
@@ -171,9 +179,6 @@ archive_static_lib() {
         "${KALDI_ROOT}/src/lm/kaldi-lm.a" \
         "${KALDI_ROOT}/src/rnnlm/kaldi-rnnlm.a" \
         "${KALDI_ROOT}/src/hmm/kaldi-hmm.a" \
-        "${KALDI_ROOT}/src/nnet3/kaldi-nnet3.a" \
-        "${KALDI_ROOT}/src/transform/kaldi-transform.a" \
-        "${KALDI_ROOT}/src/cudamatrix/kaldi-cudamatrix.a" \
         "${KALDI_ROOT}/src/matrix/kaldi-matrix.a" \
         "${KALDI_ROOT}/src/fstext/kaldi-fstext.a" \
         "${KALDI_ROOT}/src/util/kaldi-util.a" \
@@ -181,7 +186,13 @@ archive_static_lib() {
         "${KALDI_ROOT}/tools/openfst-1.8.0/lib/libfst.a" \
         "${KALDI_ROOT}/tools/openfst-1.8.0/lib/libfstngram.a"
 
+    # 剥离无用调试符号 (-S) 保证所有 C++ 符号表完整
+    strip -S "${OUT_DIR}/libvosk.a" 2>/dev/null || true
+    ranlib -no_warning_for_no_symbols -c "${OUT_DIR}/libvosk.a" 2>/dev/null || ranlib "${OUT_DIR}/libvosk.a" 2>/dev/null || true
+
     cp -fv "${SCRIPT_DIR}/vosk-api/src/vosk_api.h" "${OUT_DIR}/vosk_api.h" 2>/dev/null || true
+    local LIB_SIZE=$(du -sh "${OUT_DIR}/libvosk.a" | cut -f1)
+    echo "✔ 🎉 静态库瘦身完成: ${OUT_DIR}/libvosk.a (${LIB_SIZE})"
 }
 
 # ------------------------------------------------------------------------------
@@ -251,7 +262,7 @@ build_macos_static() {
         HAVE_OPENBLAS_CLAPACK=0 \
         HAVE_MKL=0 \
         USE_SHARED=0 \
-        EXTRA_CFLAGS="-ffunction-sections -fdata-sections ${ARCH_FLAGS}" \
+        EXTRA_CFLAGS="-ffunction-sections -fdata-sections -O3 -DNDEBUG -g0 ${ARCH_FLAGS}" \
         EXTRA_LDFLAGS="${ARCH_FLAGS}"
 
     local OUT_DIR="${SCRIPT_DIR}/dist/macos/${TARGET_ARCH}"
