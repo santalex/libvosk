@@ -8,7 +8,7 @@
 This repository provides an automated, hermetic, Docker-based multi-platform build engine and binary distribution for [Vosk API](https://github.com/alphacep/vosk-api) (v0.3.50+), covering 64-bit, 32-bit, and cross-architecture targets across Desktop, Mobile, TV, and Embedded Linux ecosystems.
 
 > [!NOTE]
-> **Status Note**: Currently, only the **macOS static libraries (`libvosk-macos-*-static.zip` / `.a`)** have been fully tested and verified in production environments. Binary packages for other platforms are compiled using standard toolchains and provided as prebuilt releases.
+> **Status & Verification**: Currently, only the **macOS static libraries (`libvosk-macos-*-static.zip` / `.a`)** have been fully tested and verified in active workflows. Prebuilt binaries for other platforms (iOS, tvOS, Windows, Linux, Android, RISC-V) are compiled using standard toolchains and shared publicly for community testing and experimentation. Please refer to the [Disclaimer & License](#️-disclaimer--license) below.
 
 ---
 
@@ -91,5 +91,12 @@ For NVIDIA GPU acceleration on Linux/Windows, CUDA dynamic linking requires comp
 
 ---
 
-## 📄 License
-Licensed under the Apache License, Version 2.0.
+## ⚖️ Disclaimer & License
+
+### Disclaimer
+This repository is maintained primarily for personal workflows and experimental builds. Currently, only the macOS static binaries have been verified in active use; all multi-platform prebuilt binaries are shared publicly with the open-source community on an **"AS IS"** basis, without warranties or conditions of any kind, either express or implied.
+
+Users are encouraged to evaluate and verify the prebuilt artifacts for their own use cases.
+
+### License
+This project and the distributed binaries are licensed under the [Apache License, Version 2.0](LICENSE), in full alignment with upstream [Vosk API](https://github.com/alphacep/vosk-api).
