@@ -112,13 +112,13 @@ function Prepare-Dependencies {
     $kaldiDir = Join-Path $DepsDir "kaldi"
     $voskDir = Join-Path $DepsDir "vosk-api"
 
-    # A. OpenFST (Official Google Research CMake Repository)
-    if (-not (Test-Path (Join-Path $openfstDir "CMakeLists.txt"))) {
-        Write-Host "--> Cloning OpenFST repository (google-research/openfst)..." -ForegroundColor Yellow
+    # A. OpenFST (Alphacep OpenFST Repository)
+    if (-not (Test-Path (Join-Path $openfstDir "src\include\fst\fst.h"))) {
+        Write-Host "--> Cloning OpenFST repository (alphacep/openfst)..." -ForegroundColor Yellow
         if (Test-Path $openfstDir) {
             Remove-Item -Recurse -Force $openfstDir -ErrorAction SilentlyContinue
         }
-        git clone --depth=1 https://github.com/google-research/openfst $openfstDir
+        git clone --depth=1 https://github.com/alphacep/openfst $openfstDir
     }
 
     # B. Kaldi (Vosk Fork)
@@ -164,7 +164,7 @@ function Build-Target-Arch([string]$targetArch) {
 
     $DepsDir = Join-Path $ScriptDir "deps"
     $OpenBLASDir = Join-Path $BuildWorkDir "openblas"
-    $OpenFSTDir = Join-Path $BuildWorkDir "openfst"
+    $OpenFSTDir = Join-Path $DepsDir "openfst"
     $KaldiDir = Join-Path $DepsDir "kaldi"
     $VoskApiDir = Join-Path $DepsDir "vosk-api"
 
@@ -188,31 +188,48 @@ function Build-Target-Arch([string]$targetArch) {
     }
 
     # --------------------------------------------------------------------------
-    # 3.2 Build OpenFST with CMake + MSVC
+    # 3.2 Build OpenFST with MSVC cl.exe
     # --------------------------------------------------------------------------
-    Write-Host "--> Building OpenFST with CMake..." -ForegroundColor Yellow
-    $fstBuild = Join-Path $BuildWorkDir "fst_build"
-    $fstInstall = Join-Path $BuildWorkDir "fst_install"
-    New-Item -ItemType Directory -Path $fstBuild -Force | Out-Null
-    New-Item -ItemType Directory -Path $fstInstall -Force | Out-Null
-    
-    $cmakeArch = switch ($targetArch) {
-        "x86_64" { "x64" }
-        "x86"    { "Win32" }
-        "arm64"  { "ARM64" }
-        default  { "x64" }
+    Write-Host "--> Compiling OpenFST with MSVC cl.exe..." -ForegroundColor Yellow
+    $fstObjDir = Join-Path $BuildWorkDir "fst_objs"
+    New-Item -ItemType Directory -Path $fstObjDir -Force | Out-Null
+
+    $fstCcFiles = @()
+    if (Test-Path "$OpenFSTDir\src\lib") {
+        Get-ChildItem -Path "$OpenFSTDir\src\lib" -Filter "*.cc" | ForEach-Object { $fstCcFiles += $_.FullName }
+    }
+    if (Test-Path "$OpenFSTDir\src\extensions\ngram") {
+        Get-ChildItem -Path "$OpenFSTDir\src\extensions\ngram" -Filter "*.cc" | ForEach-Object { $fstCcFiles += $_.FullName }
     }
 
-    cmake -B $fstBuild -S "$DepsDir\openfst" -A $cmakeArch `
-          -DBUILD_SHARED_LIBS=OFF `
-          -DFST_NO_DYNAMIC_LINKING=ON `
-          -DENABLE_LOOKAHEAD_FSTS=ON `
-          -DENABLE_NGRAM_FSTS=ON `
-          -DCMAKE_INSTALL_PREFIX="$fstInstall" `
-          -DCMAKE_BUILD_TYPE=Release `
-          -DCMAKE_CXX_FLAGS="/O2 /Gy /Gw /EHsc /MD /D_CRT_SECURE_NO_WARNINGS"
+    $fstClArgs = @(
+        "/nologo",
+        "/c",
+        "/O2",
+        "/Gy",
+        "/Gw",
+        "/GL",
+        "/EHsc",
+        "/MD",
+        "/D_CRT_SECURE_NO_WARNINGS",
+        "/DFST_NO_DYNAMIC_LINKING=1",
+        "/D_USE_MATH_DEFINES",
+        "/I$OpenFSTDir\src\include"
+    )
 
-    cmake --build $fstBuild --config Release --target install --parallel
+    Push-Location $fstObjDir
+    try {
+        & cl.exe $fstClArgs $fstCcFiles
+    } finally {
+        Pop-Location
+    }
+
+    $fstObjs = Get-ChildItem -Path $fstObjDir -Filter "*.obj" | ForEach-Object { $_.FullName }
+    $fstLibOut = Join-Path $fstObjDir "fst.lib"
+    $fstRsp = Join-Path $fstObjDir "fst_lib.rsp"
+    $fstRspLines = @("/NOLOGO", "/LTCG", "/OUT:$fstLibOut") + $fstObjs
+    [System.IO.File]::WriteAllLines($fstRsp, $fstRspLines)
+    & lib.exe "@$fstRsp"
 
     # --------------------------------------------------------------------------
     # 3.3 Compile Kaldi Core Inference Modules (Dead-Code Pruning)
@@ -224,8 +241,9 @@ function Build-Target-Arch([string]$targetArch) {
     $kaldiInclude = "$KaldiDir\src"
     $blasInclude = "$OpenBLASDir\include"
     $voskInclude = "$VoskApiDir\src"
+    $fstInclude = "$OpenFSTDir\src\include"
 
-    # Core inference modules (CPU fallback for CuMatrix and lattice/graph helpers)
+    # Complete 19 inference modules
     $modules = @(
         "base",
         "matrix",
@@ -240,7 +258,9 @@ function Build-Target-Arch([string]$targetArch) {
         "lm",
         "decoder",
         "lat",
+        "nnet2",
         "nnet3",
+        "chain",
         "online2",
         "rnnlm",
         "ivector"
@@ -278,10 +298,7 @@ function Build-Target-Arch([string]$targetArch) {
         "/Dlapack_complex_double=std::complex<double>",
         "/DLAPACK_COMPLEX_CUSTOM=1",
         "/I$kaldiInclude",
-        "/I$fstInstall\include",
-        "/I$DepsDir\openfst\src\include",
-        "/I$DepsDir\openfst\include",
-        "/I$DepsDir\openfst",
+        "/I$fstInclude",
         "/I$blasInclude",
         "/I$voskInclude"
     )
@@ -318,7 +335,7 @@ function Build-Target-Arch([string]$targetArch) {
         Write-Host "--> Packaging static library (libvosk.lib)..." -ForegroundColor Green
         
         $allObjs = Get-ChildItem -Path $kaldiObjDir -Filter "*.obj" | ForEach-Object { $_.FullName }
-        $fstLibs = Get-ChildItem -Path @($fstInstall, $fstBuild) -Recurse -Filter "*.lib" | ForEach-Object { $_.FullName } | Select-Object -Unique
+        $fstLibs = @($fstLibOut)
         $blasLibs = Get-ChildItem -Path "$OpenBLASDir\lib" -Filter "*.lib" | ForEach-Object { $_.FullName }
 
         $staticOut = Join-Path $OutDir "libvosk.lib"
@@ -347,7 +364,7 @@ function Build-Target-Arch([string]$targetArch) {
         
         $dllRspFile = Join-Path $BuildWorkDir "dll_link.rsp"
         $allObjs = Get-ChildItem -Path $kaldiObjDir -Filter "*.obj" | ForEach-Object { $_.FullName }
-        $fstLibs = Get-ChildItem -Path @($fstInstall, $fstBuild) -Recurse -Filter "*.lib" | ForEach-Object { $_.FullName } | Select-Object -Unique
+        $fstLibs = @($fstLibOut)
         $blasLibs = Get-ChildItem -Path "$OpenBLASDir\lib" -Filter "*.lib" | ForEach-Object { $_.FullName }
 
         $dllRspLines = @(
