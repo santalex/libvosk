@@ -209,8 +209,26 @@ function Build-Target-Arch([string]$targetArch) {
     $blasInclude = "$OpenBLASDir\include"
     $voskInclude = "$VoskApiDir\src"
 
-    # Core inference modules only (no CUDA, no training, no online bin)
-    $modules = @("base", "matrix", "util", "feat", "tree", "gmm", "lat", "hmm", "decoder", "nnet3", "online2", "rnnlm")
+    # Core inference modules (CPU fallback for CuMatrix and lattice/graph helpers)
+    $modules = @(
+        "base",
+        "matrix",
+        "cudamatrix",
+        "util",
+        "feat",
+        "tree",
+        "gmm",
+        "transform",
+        "fstext",
+        "hmm",
+        "lm",
+        "decoder",
+        "lat",
+        "nnet3",
+        "online2",
+        "rnnlm",
+        "ivector"
+    )
     $ccFiles = @()
     foreach ($m in $modules) {
         $mPath = Join-Path "$KaldiDir\src" $m
@@ -236,6 +254,8 @@ function Build-Target-Arch([string]$targetArch) {
         "/MD",
         "/D_CRT_SECURE_NO_WARNINGS",
         "/DHAVE_OPENBLAS=1",
+        "/DHAVE_CUDA=0",
+        "/DKALDI_DOUBLEPRECISION=0",
         "/DFST_NO_DYNAMIC_LINKING=1",
         "/D_USE_MATH_DEFINES",
         "/I$kaldiInclude",
