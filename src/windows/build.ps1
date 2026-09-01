@@ -193,6 +193,14 @@ function Build-Target-Arch([string]$targetArch) {
         Invoke-WebRequest -Uri $blasUrl -OutFile $blasZip -UseBasicParsing
         Expand-Archive -Path $blasZip -DestinationPath $OpenBLASDir -Force
         Remove-Item -Force $blasZip
+
+        # Disable Fortran string length extensions so Kaldi standard C LAPACK calls match cleanly
+        $lapackHeader = Join-Path $OpenBLASDir "include\lapack.h"
+        if (Test-Path $lapackHeader) {
+            $content = Get-Content $lapackHeader -Raw
+            $content = $content.Replace("#define LAPACK_FORTRAN_STRLEN_END", "/* #define LAPACK_FORTRAN_STRLEN_END */")
+            Set-Content -Path $lapackHeader -Value $content -NoNewline
+        }
     }
 
     # --------------------------------------------------------------------------
