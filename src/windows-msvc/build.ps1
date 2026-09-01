@@ -392,6 +392,11 @@ function Build-Target-Arch([string]$targetArch) {
         $voskCcFiles += "$VoskApiDir\src\postprocessor.cc"
     }
 
+    $cblasImpl = Join-Path $ScriptDir "cblas_impl.c"
+    if (Test-Path $cblasImpl) {
+        $voskCcFiles += $cblasImpl
+    }
+
     $voskObjDir = Join-Path $kaldiObjDir "vosk"
     New-Item -ItemType Directory -Path $voskObjDir -Force | Out-Null
     Push-Location $voskObjDir
