@@ -121,6 +121,14 @@ function Prepare-Dependencies {
         git clone --depth=1 https://github.com/alphacep/openfst $openfstDir
     }
 
+    # Patch OpenFST compat.h for MSVC C++17 alias template deprecation compatibility
+    $fstCompatH = Join-Path "$openfstDir\src\include\fst" "compat.h"
+    if (Test-Path $fstCompatH) {
+        $fstCompatContent = Get-Content -Raw $fstCompatH
+        $fstCompatContent = $fstCompatContent -replace '__declspec\(deprecated\(message\)\)', '[[deprecated(message)]]'
+        Set-Content -Path $fstCompatH -Value $fstCompatContent -Encoding UTF8
+    }
+
     # B. Kaldi (Vosk Fork)
     if (-not (Test-Path (Join-Path $kaldiDir "src"))) {
         Write-Host "--> Cloning Kaldi repository..." -ForegroundColor Yellow
