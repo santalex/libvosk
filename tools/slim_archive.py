@@ -62,12 +62,14 @@ def parse_symbols_msvc(obj_path):
         res = subprocess.run(["dumpbin", "/SYMBOLS", str(obj_path)],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
         for line in res.stdout.splitlines():
-            if "External" in line:
+            if "External" in line and "|" in line:
                 parts = line.split("|")
                 if len(parts) >= 2:
                     sym_name = parts[1].strip()
+                    if not sym_name:
+                        continue
                     norm_name = sym_name[1:] if sym_name.startswith('_') else sym_name
-                    if "UNDEF" in line:
+                    if "UNDEF" in parts[0]:
                         undefined.add(sym_name)
                         undefined.add(norm_name)
                     else:
@@ -76,6 +78,62 @@ def parse_symbols_msvc(obj_path):
     except Exception:
         pass
     return defined, undefined
+
+
+def extract_ar_python(archive_path, output_dir):
+    """跨平台纯 Python 兼容解包 GNU/BSD/MSVC 格式的 ar 归档"""
+    try:
+        with open(archive_path, "rb") as f:
+            magic = f.read(8)
+            if magic != b"!<arch>\n":
+                return 0
+            long_names = b""
+            counter = 0
+            while True:
+                header = f.read(60)
+                if not header or len(header) < 60:
+                    break
+                raw_name = header[0:16].decode("ascii", errors="ignore").strip()
+                size_str = header[48:58].decode("ascii", errors="ignore").strip()
+                if not size_str.isdigit():
+                    break
+                size = int(size_str)
+                data = f.read(size)
+                if size % 2 != 0:
+                    f.read(1) # 2-byte alignment padding
+                
+                # GNU long-name table
+                if raw_name == "//":
+                    long_names = data
+                    continue
+                # Symbol directory table
+                elif raw_name == "/" or raw_name == "" or raw_name.startswith("/ "):
+                    continue
+                # GNU long-name offset /offset
+                elif raw_name.startswith("/") and raw_name[1:].isdigit():
+                    offset = int(raw_name[1:])
+                    end_pos = long_names.find(b"/\n", offset)
+                    if end_pos == -1: end_pos = long_names.find(b"\n", offset)
+                    if end_pos == -1: end_pos = long_names.find(b"\0", offset)
+                    filename = long_names[offset:end_pos].decode("utf-8", errors="ignore").rstrip("/") if end_pos != -1 else f"obj_{counter}.o"
+                # BSD long-name #1/len
+                elif raw_name.startswith("#1/"):
+                    name_len = int(raw_name[3:])
+                    filename = data[:name_len].decode("utf-8", errors="ignore").rstrip("\x00")
+                    data = data[name_len:]
+                else:
+                    filename = raw_name.rstrip("/ ")
+                
+                counter += 1
+                safe_name = os.path.basename(filename)
+                if not safe_name.endswith(".o") and not safe_name.endswith(".obj"):
+                    safe_name = f"{safe_name}.o"
+                out_file = Path(output_dir) / f"{counter:04d}_{safe_name}"
+                with open(out_file, "wb") as out_f:
+                    out_f.write(data)
+            return counter
+    except Exception:
+        return 0
 
 
 def extract_header_symbols(header_path):
@@ -118,16 +176,15 @@ def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_to
         print("--> [1/4] 正在解压原始静态库目标文件...")
         is_windows_lib = input_path.suffix.lower() == ".lib" and shutil.which("lib.exe") is not None
         
-        if is_windows_lib:
-            # MSVC lib.exe /EXTRACT 提取方式或使用 llvm-ar
-            if shutil.which("llvm-ar"):
-                subprocess.run(["llvm-ar", "x", str(input_path)], cwd=str(temp_dir), check=True)
+        extracted_count = extract_ar_python(input_path, temp_dir)
+        if extracted_count == 0:
+            if is_windows_lib:
+                if shutil.which("llvm-ar"):
+                    subprocess.run(["llvm-ar", "x", str(input_path)], cwd=str(temp_dir), check=True)
+                else:
+                    subprocess.run(["7z", "x", str(input_path), f"-o{temp_dir}"], check=True)
             else:
-                print("⚠️ 提示: 使用 7z 或标准工具解包 lib 归档...")
-                subprocess.run(["7z", "x", str(input_path), f"-o{temp_dir}"], check=True)
-        else:
-            # 标准 ar 解包
-            subprocess.run([ar_tool, "x", str(input_path)], cwd=str(temp_dir), check=True)
+                subprocess.run([ar_tool, "x", str(input_path)], cwd=str(temp_dir), check=True)
             
         all_objs = list(temp_dir.glob("*.o")) + list(temp_dir.glob("*.obj"))
         if not all_objs:
@@ -140,30 +197,39 @@ def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_to
         print(f"    从头文件提取到 {len(root_symbols)} 个核心 Vosk C API 根符号")
 
         # 3. 构建符号依赖图 (Symbol Inverted Index)
-        print("--> [2/4] 正在解析目标文件符号表并构建依赖图...")
+        print("--> [2/4] 正在多线程解析目标文件符号表并构建依赖图...", flush=True)
         symbol_to_obj = {}
         obj_undefined = {}
         kept_objs = set()
 
-        for obj in all_objs:
+        import concurrent.futures
+        def process_single_obj(obj):
             if is_windows_lib:
                 defined, undef = parse_symbols_msvc(obj)
             else:
                 defined, undef = parse_symbols_nm(obj, nm_tool=nm_tool)
-                
-            obj_undefined[obj] = undef
-            for sym in defined:
-                symbol_to_obj[sym] = obj
+            name_lower = obj.name.lower()
+            is_root = (
+                any(sym in defined for sym in root_symbols) or
+                ("fst" in name_lower) or
+                ("ngram" in name_lower) or
+                ("cblas" in name_lower) or
+                ("clapack" in name_lower) or
+                ("f2c" in name_lower)
+            )
+            return obj, defined, undef, is_root
 
-            # 判定是否为根节点 (Root Node)
-            # A. 包含公开 vosk_* C API
-            if any(sym in defined for sym in root_symbols):
-                kept_objs.add(obj)
-            # B. 包含 OpenFST 静态字典类型自注册机制 (避免运行时出现 Class not found)
-            if "fst" in obj.name.lower() or "ngram" in obj.name.lower():
-                kept_objs.add(obj)
+        max_workers = min(32, (os.cpu_count() or 4) * 4)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            results = executor.map(process_single_obj, all_objs)
+            for obj, defined, undef, is_root in results:
+                obj_undefined[obj] = undef
+                for sym in defined:
+                    symbol_to_obj[sym] = obj
+                if is_root:
+                    kept_objs.add(obj)
 
-        print(f"    识别出 {len(kept_objs)} 个初始根节点与 OpenFST 核心模块")
+        print(f"    识别出 {len(kept_objs)} 个初始根节点与 OpenFST/数学 核心模块")
 
         # 4. 广度优先搜索 (BFS) 计算符号传递闭包
         print("--> [3/4] 正在执行传递闭包图遍历 (Transitive Reachability Closure)...")
@@ -187,10 +253,17 @@ def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_to
             
         kept_obj_paths = [str(p) for p in kept_objs]
         if is_windows_lib:
-            subprocess.run(["lib.exe", "/NOLOGO", f"/OUT:{output_path}"] + kept_obj_paths, check=True)
+            rsp_path = temp_dir / "lib_pack.rsp"
+            with open(rsp_path, "w", encoding="utf-8") as rf:
+                rf.write(f"/NOLOGO\n/OUT:{output_path}\n")
+                for p in kept_obj_paths:
+                    rf.write(f'"{p}"\n')
+            subprocess.run(["lib.exe", f"@{rsp_path}"], check=True)
         else:
-            # 分批或直接传入 ar
-            subprocess.run([ar_tool, "rcs", str(output_path)] + kept_obj_paths, check=True)
+            chunk_size = 200
+            for i in range(0, len(kept_obj_paths), chunk_size):
+                chunk = kept_obj_paths[i:i + chunk_size]
+                subprocess.run([ar_tool, "rcs", str(output_path)] + chunk, check=True)
             try:
                 if sys.platform == "darwin":
                     subprocess.run(["strip", "-S", str(output_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)

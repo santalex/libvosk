@@ -105,7 +105,7 @@ RUN cd /opt \
         /opt/kaldi/local/lib/libopenblas.a; do \
         [ -f "$lib" ] && arm-linux-gnueabihf-ar x "$lib"; \
     done \
+    && arm-linux-gnueabihf-strip --strip-debug *.o 2>/dev/null || true \
     && arm-linux-gnueabihf-ar rcs /opt/dist/linux/armv7l/libvosk.a *.o \
-    && arm-linux-gnueabihf-strip --strip-unneeded -R .comment -R .note /opt/dist/linux/armv7l/libvosk.a 2>/dev/null || true \
     && arm-linux-gnueabihf-ranlib /opt/dist/linux/armv7l/libvosk.a \
     && rm -rf /opt/build_tmp

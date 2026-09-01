@@ -105,7 +105,7 @@ RUN cd /opt \
         /opt/kaldi/local/lib/libopenblas.a; do \
         [ -f "$lib" ] && aarch64-linux-gnu-ar x "$lib"; \
     done \
+    && aarch64-linux-gnu-strip --strip-debug *.o 2>/dev/null || true \
     && aarch64-linux-gnu-ar rcs /opt/dist/linux/aarch64/libvosk.a *.o \
-    && aarch64-linux-gnu-strip --strip-unneeded -R .comment -R .note /opt/dist/linux/aarch64/libvosk.a 2>/dev/null || true \
     && aarch64-linux-gnu-ranlib /opt/dist/linux/aarch64/libvosk.a \
     && rm -rf /opt/build_tmp

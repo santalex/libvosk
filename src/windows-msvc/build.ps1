@@ -445,6 +445,14 @@ function Build-Target-Arch([string]$targetArch) {
             Write-Error "Static library creation failed with exit code $LASTEXITCODE"
             exit 1
         }
+        # Automatically optimize static library with Transitive Symbol Reachability Slimmer
+        $slimTool = Join-Path $ScriptDir "..\..\tools\slim_archive.py"
+        $headerFile = Join-Path "$voskDir\src" "vosk_api.h"
+        if ((Test-Path $slimTool) -and (Test-Path $headerFile)) {
+            Write-Host "--> Running slim_archive.py optimization on $staticOut..." -ForegroundColor Yellow
+            python $slimTool $staticOut $staticOut --header $headerFile
+        }
+
         Copy-Item -Path $staticOut -Destination $staticOutAlt -Force
 
         $libSizeMB = [Math]::Round((Get-Item $staticOut).Length / 1MB, 2)

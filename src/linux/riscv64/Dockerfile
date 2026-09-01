@@ -108,7 +108,7 @@ RUN cd /opt \
         /opt/kaldi/local/lib/libopenblas.a; do \
         [ -f "$lib" ] && riscv64-linux-gnu-ar x "$lib"; \
     done \
+    && riscv64-linux-gnu-strip --strip-debug *.o 2>/dev/null || true \
     && riscv64-linux-gnu-ar rcs /opt/dist/linux/riscv64/libvosk.a *.o \
-    && riscv64-linux-gnu-strip --strip-unneeded -R .comment -R .note /opt/dist/linux/riscv64/libvosk.a 2>/dev/null || true \
     && riscv64-linux-gnu-ranlib /opt/dist/linux/riscv64/libvosk.a \
     && rm -rf /opt/build_tmp
