@@ -29,7 +29,7 @@ static char get_side(enum CBLAS_SIDE side) {
 // ---------------------------------------------------------------------------
 float cblas_sdot(const int N, const float *X, const int incX, const float *Y, const int incY) {
     integer n = N, incx = incX, incy = incY;
-    extern real sdot_(integer *, real *, integer *, real *, integer *);
+    extern doublereal sdot_(integer *, real *, integer *, real *, integer *);
     return (float)sdot_(&n, (real*)X, &incx, (real*)Y, &incy);
 }
 
@@ -37,6 +37,44 @@ double cblas_ddot(const int N, const double *X, const int incX, const double *Y,
     integer n = N, incx = incX, incy = incY;
     extern doublereal ddot_(integer *, doublereal *, integer *, doublereal *, integer *);
     return (double)ddot_(&n, (doublereal*)X, &incx, (doublereal*)Y, &incy);
+}
+
+float cblas_snrm2(const int N, const float *X, const int incX) {
+    integer n = N, incx = incX;
+    extern doublereal snrm2_(integer *, real *, integer *);
+    return (float)snrm2_(&n, (real*)X, &incx);
+}
+
+double cblas_dnrm2(const int N, const double *X, const int incX) {
+    integer n = N, incx = incX;
+    extern doublereal dnrm2_(integer *, doublereal *, integer *);
+    return (double)dnrm2_(&n, (doublereal*)X, &incx);
+}
+
+float cblas_sasum(const int N, const float *X, const int incX) {
+    integer n = N, incx = incX;
+    extern doublereal sasum_(integer *, real *, integer *);
+    return (float)sasum_(&n, (real*)X, &incx);
+}
+
+double cblas_dasum(const int N, const double *X, const int incX) {
+    integer n = N, incx = incX;
+    extern doublereal dasum_(integer *, doublereal *, integer *);
+    return (double)dasum_(&n, (doublereal*)X, &incx);
+}
+
+CBLAS_INDEX cblas_isamax(const int N, const float *X, const int incX) {
+    integer n = N, incx = incX;
+    extern integer isamax_(integer *, real *, integer *);
+    integer res = isamax_(&n, (real*)X, &incx);
+    return (res > 0) ? (CBLAS_INDEX)(res - 1) : 0;
+}
+
+CBLAS_INDEX cblas_idamax(const int N, const double *X, const int incX) {
+    integer n = N, incx = incX;
+    extern integer idamax_(integer *, doublereal *, integer *);
+    integer res = idamax_(&n, (doublereal*)X, &incx);
+    return (res > 0) ? (CBLAS_INDEX)(res - 1) : 0;
 }
 
 void cblas_scopy(const int N, const float *X, const int incX, float *Y, const int incY) {
@@ -77,18 +115,6 @@ void cblas_dscal(const int N, const double alpha, double *X, const int incX) {
     doublereal a = alpha;
     extern int dscal_(integer *, doublereal *, doublereal *, integer *);
     dscal_(&n, &a, (doublereal*)X, &incx);
-}
-
-float cblas_sasum(const int N, const float *X, const int incX) {
-    integer n = N, incx = incX;
-    extern real sasum_(integer *, real *, integer *);
-    return (float)sasum_(&n, (real*)X, &incx);
-}
-
-double cblas_dasum(const int N, const double *X, const int incX) {
-    integer n = N, incx = incX;
-    extern doublereal dasum_(integer *, doublereal *, integer *);
-    return (double)dasum_(&n, (doublereal*)X, &incx);
 }
 
 void cblas_srot(const int N, float *X, const int incX, float *Y, const int incY, const float c, const float s) {
