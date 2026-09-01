@@ -343,7 +343,7 @@ function Build-Target-Arch([string]$targetArch) {
         if (Test-Path $mPath) {
             $mCcFiles = @()
             Get-ChildItem -Path $mPath -Filter "*.cc" | ForEach-Object {
-                if (-not ($_.Name -like "*-test.cc") -and -not ($_.Name -like "*-bin.cc") -and -not ($_.Name -like "online-nnet2-*")) {
+                if (-not ($_.Name -like "*-test.cc") -and -not ($_.Name -like "*-bin.cc") -and -not ($_.Name -like "online-nnet2-decoding*")) {
                     $mCcFiles += $_.FullName
                 }
             }
@@ -391,9 +391,6 @@ function Build-Target-Arch([string]$targetArch) {
     }
     if (Test-Path "$VoskApiDir\src\postprocessor.cc") {
         $voskCcFiles += "$VoskApiDir\src\postprocessor.cc"
-    }
-    if (Test-Path "$VoskApiDir\src\processor.cc") {
-        $voskCcFiles += "$VoskApiDir\src\processor.cc"
     }
 
     $voskObjDir = Join-Path $kaldiObjDir "vosk"
