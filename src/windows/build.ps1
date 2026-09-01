@@ -343,7 +343,7 @@ function Build-Target-Arch([string]$targetArch) {
         if (Test-Path $mPath) {
             $mCcFiles = @()
             Get-ChildItem -Path $mPath -Filter "*.cc" | ForEach-Object {
-                if (-not ($_.Name -like "*-test.cc") -and -not ($_.Name -like "*-bin.cc")) {
+                if (-not ($_.Name -like "*-test.cc") -and -not ($_.Name -like "*-bin.cc") -and -not ($_.Name -like "online-nnet2-*")) {
                     $mCcFiles += $_.FullName
                 }
             }
