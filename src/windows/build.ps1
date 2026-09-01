@@ -110,16 +110,22 @@ function Prepare-Dependencies {
 
     Set-Location $DepsDir
 
-    # A. OpenFST (MSVC Port)
+    # A. OpenFST (CMake & MSVC Compatible Port)
     if (-not (Test-Path "openfst")) {
-        Write-Host "--> Cloning OpenFST repository..." -ForegroundColor Yellow
-        git clone --depth=1 https://github.com/alphacep/openfst openfst
+        Write-Host "--> Cloning OpenFST repository (k2-fsa CMake port)..." -ForegroundColor Yellow
+        git clone --depth=1 https://github.com/k2-fsa/openfst openfst
     }
 
     # B. Kaldi (Vosk Fork)
     if (-not (Test-Path "kaldi")) {
         Write-Host "--> Cloning Kaldi repository..." -ForegroundColor Yellow
         git clone -b vosk-android --single-branch --depth=1 https://github.com/alphacep/kaldi kaldi
+    }
+
+    # Generate Kaldi version.h if missing
+    $versionH = Join-Path "$DepsDir\kaldi\src\base" "version.h"
+    if (-not (Test-Path $versionH)) {
+        "#ifndef KALDI_BASE_VERSION_H_`n#define KALDI_BASE_VERSION_H_`n#define KALDI_VERSION `"5.5`"`n#define KALDI_GIT_HEAD `"vosk`"`n#endif" | Set-Content -Path $versionH -Encoding ASCII
     }
 
     # C. Vosk API
@@ -187,9 +193,8 @@ function Build-Target-Arch([string]$targetArch) {
     }
 
     cmake -B $fstBuild -S "$DepsDir\openfst" -A $cmakeArch `
+          -DBUILD_SHARED_LIBS=OFF `
           -DFST_NO_DYNAMIC_LINKING=ON `
-          -DENABLE_SHARED=OFF `
-          -DENABLE_STATIC=ON `
           -DENABLE_LOOKAHEAD_FSTS=ON `
           -DENABLE_NGRAM_FSTS=ON `
           -DCMAKE_BUILD_TYPE=Release `
@@ -206,6 +211,9 @@ function Build-Target-Arch([string]$targetArch) {
 
     $kaldiInclude = "$KaldiDir\src"
     $fstInclude = "$DepsDir\openfst\src\include"
+    if (-not (Test-Path $fstInclude)) {
+        $fstInclude = "$DepsDir\openfst\openfst\src\include"
+    }
     $blasInclude = "$OpenBLASDir\include"
     $voskInclude = "$VoskApiDir\src"
 
@@ -258,6 +266,9 @@ function Build-Target-Arch([string]$targetArch) {
         "/DKALDI_DOUBLEPRECISION=0",
         "/DFST_NO_DYNAMIC_LINKING=1",
         "/D_USE_MATH_DEFINES",
+        "/Dlapack_complex_float=std::complex<float>",
+        "/Dlapack_complex_double=std::complex<double>",
+        "/DLAPACK_COMPLEX_CUSTOM=1",
         "/I$kaldiInclude",
         "/I$fstInclude",
         "/I$blasInclude",
