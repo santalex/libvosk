@@ -205,6 +205,7 @@ function Build-Target-Arch([string]$targetArch) {
     $fstClArgs = @(
         "/nologo",
         "/c",
+        "/std:c++17",
         "/O2",
         "/Gy",
         "/Gw",
@@ -214,6 +215,8 @@ function Build-Target-Arch([string]$targetArch) {
         "/D_CRT_SECURE_NO_WARNINGS",
         "/DFST_NO_DYNAMIC_LINKING=1",
         "/D_USE_MATH_DEFINES",
+        "/Dssize_t=intptr_t",
+        "/D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS",
         "/I$OpenFSTDir\src\include"
     )
 
@@ -282,6 +285,7 @@ function Build-Target-Arch([string]$targetArch) {
     $clArgs = @(
         "/nologo",
         "/c",
+        "/std:c++17",
         "/O2",
         "/Gy",
         "/Gw",
@@ -294,9 +298,11 @@ function Build-Target-Arch([string]$targetArch) {
         "/DKALDI_DOUBLEPRECISION=0",
         "/DFST_NO_DYNAMIC_LINKING=1",
         "/D_USE_MATH_DEFINES",
+        "/Dssize_t=intptr_t",
         "/Dlapack_complex_float=std::complex<float>",
         "/Dlapack_complex_double=std::complex<double>",
         "/DLAPACK_COMPLEX_CUSTOM=1",
+        "/D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS",
         "/I$kaldiInclude",
         "/I$fstInclude",
         "/I$blasInclude",
