@@ -20,13 +20,24 @@ typedef intptr_t ssize_t;
 
 // GCC/Clang built-ins fallback for MSVC
 inline int __builtin_popcountll(unsigned long long x) {
+#if defined(_M_X64) || defined(_M_ARM64)
     return (int)__popcnt64(x);
+#else
+    return (int)(__popcnt((unsigned int)x) + __popcnt((unsigned int)(x >> 32)));
+#endif
 }
 
 inline int __builtin_ctzll(unsigned long long x) {
+#if defined(_M_X64) || defined(_M_ARM64)
     unsigned long idx = 0;
     if (_BitScanForward64(&idx, x)) return (int)idx;
     return 64;
+#else
+    unsigned long idx = 0;
+    if (_BitScanForward(&idx, (unsigned long)x)) return (int)idx;
+    if (_BitScanForward(&idx, (unsigned long)(x >> 32))) return (int)(idx + 32);
+    return 64;
+#endif
 }
 
 inline int __builtin_popcount(unsigned int x) {
