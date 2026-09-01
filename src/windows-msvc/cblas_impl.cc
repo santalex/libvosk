@@ -1,9 +1,9 @@
-#include "cblas.h"
-#include "f2c.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include "cblas.h"
+#include "f2c.h"
 
 static char get_trans(enum CBLAS_TRANSPOSE trans) {
     if (trans == CblasNoTrans) return 'N';
