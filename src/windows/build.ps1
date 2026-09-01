@@ -181,7 +181,7 @@ function Build-Target-Arch([string]$targetArch) {
     # --------------------------------------------------------------------------
     $blasLib = Join-Path $OpenBLASDir "lib\libopenblas.lib"
     if (-not (Test-Path $blasLib)) {
-        Write-Host "--> Downloading OpenBLAS MSVC binaries for $targetArch..." -ForegroundColor Yellow
+        Write-Host "--> Downloading OpenBLAS binaries for $targetArch..." -ForegroundColor Yellow
         New-Item -ItemType Directory -Path $OpenBLASDir -Force | Out-Null
         
         $blasZip = Join-Path $BuildWorkDir "openblas.zip"
@@ -201,6 +201,29 @@ function Build-Target-Arch([string]$targetArch) {
             $content = $content.Replace("#define LAPACK_FORTRAN_STRLEN_END", "/* #define LAPACK_FORTRAN_STRLEN_END */")
             Set-Content -Path $lapackHeader -Value $content -NoNewline
         }
+
+        # Generate MSVC import library (.lib) from DLL exports
+        $libDir = Join-Path $OpenBLASDir "lib"
+        New-Item -ItemType Directory -Path $libDir -Force | Out-Null
+        $dllFile = Join-Path $OpenBLASDir "bin\libopenblas.dll"
+        if (-not (Test-Path $dllFile)) {
+            $dllFile = (Get-ChildItem -Path $OpenBLASDir -Recurse -Filter "*.dll" | Select-Object -First 1).FullName
+        }
+        if (Test-Path $dllFile) {
+            Write-Host "--> Generating MSVC import library from $dllFile..." -ForegroundColor Yellow
+            $exportsText = & dumpbin.exe /exports $dllFile
+            $defLines = @("LIBRARY $([System.IO.Path]::GetFileName($dllFile))", "EXPORTS")
+            foreach ($line in $exportsText) {
+                if ($line -match '^\s+\d+\s+[0-9A-Fa-f]+\s+[0-9A-Fa-f]+\s+([a-zA-Z0-9_]+)') {
+                    $defLines += "    $($Matches[1])"
+                }
+            }
+            $defPath = Join-Path $libDir "libopenblas.def"
+            [System.IO.File]::WriteAllLines($defPath, $defLines)
+            $machineArg = if ($targetArch -eq "x86_64") { "/MACHINE:X64" } elseif ($targetArch -eq "arm64") { "/MACHINE:ARM64" } else { "/MACHINE:X86" }
+            & lib.exe "/DEF:$defPath" "/OUT:$blasLib" $machineArg
+            Write-Host "--> Successfully created MSVC import library: $blasLib ($($defLines.Count - 2) exported symbols)" -ForegroundColor Green
+        }
     }
 
     # --------------------------------------------------------------------------
@@ -219,6 +242,7 @@ function Build-Target-Arch([string]$targetArch) {
     }
 
     $compatHeader = Join-Path $ScriptDir "msvc_compat.h"
+    $fstInclude = "$OpenFSTDir\src\include"
 
     $fstClArgs = @(
         "/nologo",
@@ -227,7 +251,6 @@ function Build-Target-Arch([string]$targetArch) {
         "/O2",
         "/Gy",
         "/Gw",
-        "/GL",
         "/EHsc",
         "/MD",
         "/DNOMINMAX",
@@ -236,42 +259,34 @@ function Build-Target-Arch([string]$targetArch) {
         "/DFST_NO_DYNAMIC_LINKING=1",
         "/D_USE_MATH_DEFINES",
         "/Dssize_t=intptr_t",
-        "/D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS",
         "/FI$compatHeader",
-        "/I$OpenFSTDir\src\include"
+        "/I$fstInclude"
     )
 
     Push-Location $fstObjDir
     try {
         & cl.exe $fstClArgs $fstCcFiles
         if ($LASTEXITCODE -ne 0) {
-            Write-Error "OpenFST cl.exe compilation failed with exit code $LASTEXITCODE"
+            Write-Error "OpenFST compilation failed with exit code $LASTEXITCODE"
             exit 1
         }
     } finally {
         Pop-Location
     }
 
-    $fstObjs = Get-ChildItem -Path $fstObjDir -Filter "*.obj" | ForEach-Object { $_.FullName }
     $fstLibOut = Join-Path $fstObjDir "fst.lib"
-    $fstRsp = Join-Path $fstObjDir "fst_lib.rsp"
-    $fstRspLines = @("/NOLOGO", "/LTCG", "/OUT:$fstLibOut") + $fstObjs
-    [System.IO.File]::WriteAllLines($fstRsp, $fstRspLines)
-    & lib.exe "@$fstRsp"
+    $fstObjs = Get-ChildItem -Path $fstObjDir -Filter "*.obj" | ForEach-Object { $_.FullName }
+    & lib.exe /NOLOGO "/OUT:$fstLibOut" $fstObjs
+    Write-Host "OpenFST static library generated: $fstLibOut" -ForegroundColor Green
 
     # --------------------------------------------------------------------------
-    # 3.3 Compile Kaldi Core Inference Modules (Dead-Code Pruning)
+    # 3.3 Compile Kaldi Modules with MSVC cl.exe
     # --------------------------------------------------------------------------
-    Write-Host "--> Compiling Kaldi core inference modules..." -ForegroundColor Yellow
+    Write-Host "--> Compiling Kaldi Modules with MSVC cl.exe..." -ForegroundColor Yellow
     $kaldiObjDir = Join-Path $BuildWorkDir "kaldi_objs"
     New-Item -ItemType Directory -Path $kaldiObjDir -Force | Out-Null
 
-    $kaldiInclude = "$KaldiDir\src"
-    $blasInclude = "$OpenBLASDir\include"
-    $voskInclude = "$VoskApiDir\src"
-    $fstInclude = "$OpenFSTDir\src\include"
-
-    # Complete 19 inference modules
+    # Kaldi modules required by Vosk API
     $modules = @(
         "base",
         "matrix",
@@ -286,27 +301,13 @@ function Build-Target-Arch([string]$targetArch) {
         "lm",
         "decoder",
         "lat",
-        "nnet2",
         "nnet3",
         "chain",
         "online2",
         "rnnlm",
         "ivector"
     )
-    $ccFiles = @()
-    foreach ($m in $modules) {
-        $mPath = Join-Path "$KaldiDir\src" $m
-        if (Test-Path $mPath) {
-            Get-ChildItem -Path $mPath -Filter "*.cc" | ForEach-Object {
-                if (-not ($_.Name -like "*-test.cc") -and -not ($_.Name -like "*-bin.cc")) {
-                    $ccFiles += $_.FullName
-                }
-            }
-        }
-    }
 
-    Write-Host "--> Found $($ccFiles.Count) Kaldi source files to compile..." -ForegroundColor Gray
-    
     $clArgs = @(
         "/nologo",
         "/c",
@@ -314,7 +315,6 @@ function Build-Target-Arch([string]$targetArch) {
         "/O2",
         "/Gy",
         "/Gw",
-        "/GL",
         "/EHsc",
         "/MD",
         "/DNOMINMAX",
@@ -331,27 +331,43 @@ function Build-Target-Arch([string]$targetArch) {
         "/DLAPACK_COMPLEX_CUSTOM=1",
         "/D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS",
         "/FI$compatHeader",
-        "/I$kaldiInclude",
+        "/I$KaldiDir\src",
         "/I$fstInclude",
-        "/I$blasInclude",
-        "/I$voskInclude"
+        "/I$OpenBLASDir\include",
+        "/I$VoskApiDir\src"
     )
 
-    # Batch compile in groups of 30
-    $batchSize = 30
-    for ($i = 0; $i -lt $ccFiles.Count; $i += $batchSize) {
-        $batch = $ccFiles[$i..[Math]::Min($i + $batchSize - 1, $ccFiles.Count - 1)]
-        $currentClArgs = $clArgs + $batch
-        
-        Push-Location $kaldiObjDir
-        try {
-            & cl.exe $currentClArgs
-            if ($LASTEXITCODE -ne 0) {
-                Write-Error "Kaldi batch compilation failed with exit code $LASTEXITCODE"
-                exit 1
+    # Compile each module in its own subfolder to prevent object filename collisions
+    foreach ($m in $modules) {
+        $mPath = Join-Path "$KaldiDir\src" $m
+        if (Test-Path $mPath) {
+            $mCcFiles = @()
+            Get-ChildItem -Path $mPath -Filter "*.cc" | ForEach-Object {
+                if (-not ($_.Name -like "*-test.cc") -and -not ($_.Name -like "*-bin.cc")) {
+                    $mCcFiles += $_.FullName
+                }
             }
-        } finally {
-            Pop-Location
+            if ($mCcFiles.Count -gt 0) {
+                $mObjDir = Join-Path $kaldiObjDir $m
+                New-Item -ItemType Directory -Path $mObjDir -Force | Out-Null
+                Write-Host "--> Compiling Kaldi module '$m' ($($mCcFiles.Count) files)..." -ForegroundColor Gray
+                
+                $batchSize = 30
+                for ($i = 0; $i -lt $mCcFiles.Count; $i += $batchSize) {
+                    $batch = $mCcFiles[$i..[Math]::Min($i + $batchSize - 1, $mCcFiles.Count - 1)]
+                    $currentClArgs = $clArgs + $batch
+                    Push-Location $mObjDir
+                    try {
+                        & cl.exe $currentClArgs
+                        if ($LASTEXITCODE -ne 0) {
+                            Write-Error "Kaldi module $m batch compilation failed with exit code $LASTEXITCODE"
+                            exit 1
+                        }
+                    } finally {
+                        Pop-Location
+                    }
+                }
+            }
         }
     }
 
@@ -380,7 +396,9 @@ function Build-Target-Arch([string]$targetArch) {
         $voskCcFiles += "$VoskApiDir\src\processor.cc"
     }
 
-    Push-Location $kaldiObjDir
+    $voskObjDir = Join-Path $kaldiObjDir "vosk"
+    New-Item -ItemType Directory -Path $voskObjDir -Force | Out-Null
+    Push-Location $voskObjDir
     try {
         & cl.exe $clArgs $voskCcFiles
         if ($LASTEXITCODE -ne 0) {
@@ -394,22 +412,26 @@ function Build-Target-Arch([string]$targetArch) {
     # --------------------------------------------------------------------------
     # 3.5 Build Static Library (libvosk.lib)
     # --------------------------------------------------------------------------
+    $allObjs = Get-ChildItem -Path $kaldiObjDir -Recurse -Filter "*.obj" | ForEach-Object { $_.FullName }
+    $fstLibs = @($fstLibOut)
+    $blasLibs = Get-ChildItem -Path "$OpenBLASDir\lib" -Filter "*.lib" | ForEach-Object { $_.FullName }
+
     if ($LinkType -eq "all" -or $LinkType -eq "static") {
         Write-Host "--> Packaging static library (libvosk.lib)..." -ForegroundColor Green
         
-        $allObjs = Get-ChildItem -Path $kaldiObjDir -Filter "*.obj" | ForEach-Object { $_.FullName }
-        $fstLibs = @($fstLibOut)
-        $blasLibs = Get-ChildItem -Path "$OpenBLASDir\lib" -Filter "*.lib" | ForEach-Object { $_.FullName }
-
         $staticOut = Join-Path $OutDir "libvosk.lib"
         $staticOutAlt = Join-Path $OutDir "libvosk_static.lib"
         
         $rspFile = Join-Path $BuildWorkDir "static_lib.rsp"
-        $rspLines = @("/NOLOGO", "/LTCG", "/OUT:$staticOut") + $allObjs + $fstLibs + $blasLibs
+        $rspLines = @("/NOLOGO", "/OUT:$staticOut") + $allObjs + $fstLibs + $blasLibs
         [System.IO.File]::WriteAllLines($rspFile, $rspLines)
 
         $rspArg = "@$rspFile"
         & lib.exe $rspArg
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Static library creation failed with exit code $LASTEXITCODE"
+            exit 1
+        }
         Copy-Item -Path $staticOut -Destination $staticOutAlt -Force
 
         $libSizeMB = [Math]::Round((Get-Item $staticOut).Length / 1MB, 2)
@@ -426,10 +448,6 @@ function Build-Target-Arch([string]$targetArch) {
         $implibOut = if ($LinkType -eq "all") { Join-Path $OutDir "libvosk_dll.lib" } else { Join-Path $OutDir "libvosk.lib" }
         
         $dllRspFile = Join-Path $BuildWorkDir "dll_link.rsp"
-        $allObjs = Get-ChildItem -Path $kaldiObjDir -Filter "*.obj" | ForEach-Object { $_.FullName }
-        $fstLibs = @($fstLibOut)
-        $blasLibs = Get-ChildItem -Path "$OpenBLASDir\lib" -Filter "*.lib" | ForEach-Object { $_.FullName }
-
         $dllRspLines = @(
             "/NOLOGO",
             "/DLL",
@@ -445,6 +463,10 @@ function Build-Target-Arch([string]$targetArch) {
 
         $dllRspArg = "@$dllRspFile"
         & link.exe $dllRspArg
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Dynamic library link failed with exit code $LASTEXITCODE"
+            exit 1
+        }
 
         # Copy runtime DLLs
         Get-ChildItem -Path "$OpenBLASDir\bin" -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
