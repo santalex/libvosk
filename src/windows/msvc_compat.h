@@ -60,4 +60,14 @@ inline int __builtin_ctz(unsigned int x) {
 #undef CONST
 #endif
 
+// OpenBLAS LAPACK Fortran hidden character length compatibility for Kaldi CBLAS wrappers
+#define stptri_(uplo, diag, n, ap, info) stptri_(uplo, diag, n, ap, info, 1, 1)
+#define dtptri_(uplo, diag, n, ap, info) dtptri_(uplo, diag, n, ap, info, 1, 1)
+#define ssptrf_(uplo, n, ap, ipiv, info) ssptrf_(uplo, n, ap, ipiv, info, 1)
+#define dsptrf_(uplo, n, ap, ipiv, info) dsptrf_(uplo, n, ap, ipiv, info, 1)
+#define ssptri_(uplo, n, ap, ipiv, work, info) ssptri_(uplo, n, ap, ipiv, work, info, 1)
+#define dsptri_(uplo, n, ap, ipiv, work, info) dsptri_(uplo, n, ap, ipiv, work, info, 1)
+#define sgesvd_(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info) sgesvd_(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info, 1, 1)
+#define dgesvd_(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info) dgesvd_(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info, 1, 1)
+
 #endif
