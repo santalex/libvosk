@@ -45,10 +45,6 @@ env:
 jobs:
   build-vosk-matrix:
     name: Build (${{ matrix.os }}-${{ matrix.arch }})
-    if: |
-      (github.event_name == 'push') ||
-      ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
-       (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch))
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -105,28 +101,48 @@ jobs:
 
     steps:
       - name: Checkout Repository
+        if: |
+          (github.event_name == 'push') ||
+          ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
+           (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch))
         uses: actions/checkout@v7
 
       - name: Install macOS Build Tools
-        if: runner.os == 'macOS'
+        if: |
+          (runner.os == 'macOS') &&
+          ((github.event_name == 'push') ||
+           ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
+            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
         run: |
           brew untap aws/tap 2>/dev/null || true
           HOMEBREW_NO_AUTO_UPDATE=1 brew install autoconf automake libtool
 
       - name: Build Vosk Target (macOS / Linux / Android)
-        if: runner.os != 'Windows'
+        if: |
+          (runner.os != 'Windows') &&
+          ((github.event_name == 'push') ||
+           ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
+            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
         run: |
           VOSK_TAG="${{ inputs.vosk_tag || 'v0.3.50' }}"
           ./build.sh --os ${{ matrix.os }} --arch ${{ matrix.arch }} --vosk-tag "${VOSK_TAG}" --yes
 
       - name: Build Vosk Target (Windows MSVC Native)
-        if: runner.os == 'Windows'
+        if: |
+          (runner.os == 'Windows') &&
+          ((github.event_name == 'push') ||
+           ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
+            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
         shell: powershell
         run: |
           $VOSK_TAG = "${{ inputs.vosk_tag || 'v0.3.50' }}"
           .\src\windows\build.ps1 -Arch "${{ matrix.arch }}" -VoskTag "$VOSK_TAG"
 
       - name: Upload Target Artifact
+        if: |
+          ((github.event_name == 'push') ||
+           ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
+            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
         uses: actions/upload-artifact@v7
         with:
           name: vosk-${{ matrix.os }}-${{ matrix.arch }}
