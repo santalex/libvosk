@@ -8,7 +8,10 @@
 This repository provides an automated, hermetic, Docker-based multi-platform build engine and binary distribution for [Vosk API](https://github.com/alphacep/vosk-api) (v0.3.50+), covering 64-bit, 32-bit, and cross-architecture targets across Desktop, Mobile, TV, and Embedded Linux ecosystems.
 
 > [!NOTE]
-> **Status & Verification**: Currently, only the **macOS static libraries (`libvosk-macos-*-static.zip` / `.a`)** have been fully tested and verified in active workflows. Prebuilt binaries for other platforms (iOS, tvOS, Windows, Linux, Android, RISC-V) are compiled using standard toolchains and shared publicly for community testing and experimentation. Please refer to the [Disclaimer & License](#️-disclaimer--license) below.
+> **Status & Verification Policy**:
+> - **In Active Production Use**: The **macOS binaries (`libvosk-macos-*-static.zip` / `.dylib` / `.a`)** are actively used and battle-tested in real daily production workflows.
+> - **CI Automated E2E Testing**: Native host platforms (macOS, Linux x86_64, Windows MSVC) undergo automated End-to-End (E2E) ASR decoding test suites (`tests/test_vosk_e2e.c`) in CI.
+> - **Cross-Compiled Targets**: Cross-compiled targets (Windows GNU MinGW, iOS, tvOS, watchOS, visionOS, Android, RISC-V) are built using standard toolchains and verified for package structure and symbols (`tools/verify_packages.py`). To conserve CI resources and avoid heavy emulation, they are not executed in emulator/Wine during CI, and are provided to the community for experimentation. Please refer to the [Disclaimer & License](#️-disclaimer--license) below.
 
 ---
 

@@ -151,6 +151,19 @@ jobs:
           VOSK_TAG="${{ inputs.vosk_tag || 'v0.3.50' }}"
           ./build.sh --os ${{ matrix.os }} --arch ${{ matrix.arch }} --vosk-tag "${VOSK_TAG}" --yes
 
+      - name: Run E2E Tests (macOS & Linux Native)
+        if: |
+          ((runner.os == 'macOS' && matrix.os == 'macos') || (runner.os == 'Linux' && matrix.os == 'linux' && matrix.arch == 'x86_64')) &&
+          ((github.event_name == 'push') ||
+           ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
+            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
+        run: |
+          if [ "${{ matrix.os }}" = "macos" ]; then
+            ./tests/run_tests.sh dist/macos/${{ matrix.arch }}
+          elif [ "${{ matrix.os }}" = "linux" ] && [ "${{ matrix.arch }}" = "x86_64" ]; then
+            ./tests/run_tests.sh dist/linux/x86_64
+          fi
+
       - name: Build Vosk Target (Windows MSVC Native)
         if: |
           (runner.os == 'Windows') &&
@@ -161,6 +174,34 @@ jobs:
         run: |
           $VOSK_TAG = "${{ inputs.vosk_tag || 'v0.3.50' }}"
           .\src\windows-msvc\build.ps1 -Arch "${{ matrix.arch }}" -VoskTag "$VOSK_TAG"
+
+      - name: Run E2E Tests (Windows MSVC Native)
+        if: |
+          (runner.os == 'Windows' && matrix.arch == 'x86_64') &&
+          ((github.event_name == 'push') ||
+           ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
+            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
+        shell: powershell
+        run: |
+          $testSrc = "tests\test_vosk_e2e.c"
+          $incDir = "src\windows-msvc\deps\vosk-api\src"
+          $libDir = "dist\windows-msvc\x86_64"
+          $modelDir = "tests\model"
+          $wavFile = "tests\test.wav"
+          
+          if (-not (Test-Path $wavFile)) {
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/alphacep/vosk-api/master/python/example/test.wav" -OutFile $wavFile -UseBasicParsing
+          }
+          if (-not (Test-Path "$modelDir\am\final.mdl")) {
+            Invoke-WebRequest -Uri "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip" -OutFile "tests\model.zip" -UseBasicParsing
+            Expand-Archive -Path "tests\model.zip" -DestinationPath "tests\model_tmp" -Force
+            Move-Item "tests\model_tmp\vosk-model-small-en-us-0.15" $modelDir -Force
+            Remove-Item "tests\model.zip", "tests\model_tmp" -Recurse -Force
+          }
+          
+          & cl.exe /nologo /O2 /I"$incDir" "$testSrc" /link /LIBPATH:"$libDir" libvosk.lib /OUT:"tests\test_e2e.exe"
+          Copy-Item "$libDir\*.dll" "tests\" -Force -ErrorAction SilentlyContinue
+          & "tests\test_e2e.exe" (Resolve-Path $modelDir) (Resolve-Path $wavFile)
 
       - name: Upload Target Artifact
         if: |

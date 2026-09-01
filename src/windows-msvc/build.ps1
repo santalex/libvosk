@@ -202,27 +202,35 @@ function Build-Target-Arch([string]$targetArch) {
             Set-Content -Path $lapackHeader -Value $content -NoNewline
         }
 
-        # Generate MSVC import library (.lib) from DLL exports
-        $libDir = Join-Path $OpenBLASDir "lib"
-        New-Item -ItemType Directory -Path $libDir -Force | Out-Null
-        $dllFile = Join-Path $OpenBLASDir "bin\libopenblas.dll"
-        if (-not (Test-Path $dllFile)) {
-            $dllFile = (Get-ChildItem -Path $OpenBLASDir -Recurse -Filter "*.dll" | Select-Object -First 1).FullName
+        # Setup OpenBLAS static library for self-contained embedding
+        $staticBlas = Join-Path $OpenBLASDir "lib\libopenblas.a"
+        if (-not (Test-Path $staticBlas)) {
+            $staticBlas = (Get-ChildItem -Path $OpenBLASDir -Recurse -Filter "libopenblas.a" | Select-Object -First 1).FullName
         }
-        if (Test-Path $dllFile) {
-            Write-Host "--> Generating MSVC import library from $dllFile..." -ForegroundColor Yellow
-            $exportsText = & dumpbin.exe /exports $dllFile
-            $defLines = @("LIBRARY $([System.IO.Path]::GetFileName($dllFile))", "EXPORTS")
-            foreach ($line in $exportsText) {
-                if ($line -match '^\s+\d+\s+[0-9A-Fa-f]+\s+[0-9A-Fa-f]+\s+([a-zA-Z0-9_]+)') {
-                    $defLines += "    $($Matches[1])"
-                }
+        if ($staticBlas -and (Test-Path $staticBlas)) {
+            Copy-Item -Path $staticBlas -Destination $blasLib -Force
+            Write-Host "--> Using static OpenBLAS archive for self-contained MSVC embedding: $blasLib" -ForegroundColor Green
+        } else {
+            # Fallback to generating import library if static archive is not present
+            $dllFile = Join-Path $OpenBLASDir "bin\libopenblas.dll"
+            if (-not (Test-Path $dllFile)) {
+                $dllFile = (Get-ChildItem -Path $OpenBLASDir -Recurse -Filter "*.dll" | Select-Object -First 1).FullName
             }
-            $defPath = Join-Path $libDir "libopenblas.def"
-            [System.IO.File]::WriteAllLines($defPath, $defLines)
-            $machineArg = if ($targetArch -eq "x86_64") { "/MACHINE:X64" } elseif ($targetArch -eq "arm64") { "/MACHINE:ARM64" } else { "/MACHINE:X86" }
-            & lib.exe "/DEF:$defPath" "/OUT:$blasLib" $machineArg
-            Write-Host "--> Successfully created MSVC import library: $blasLib ($($defLines.Count - 2) exported symbols)" -ForegroundColor Green
+            if (Test-Path $dllFile) {
+                Write-Host "--> Generating MSVC import library from $dllFile..." -ForegroundColor Yellow
+                $exportsText = & dumpbin.exe /exports $dllFile
+                $defLines = @("LIBRARY $([System.IO.Path]::GetFileName($dllFile))", "EXPORTS")
+                foreach ($line in $exportsText) {
+                    if ($line -match '^\s+\d+\s+[0-9A-Fa-f]+\s+[0-9A-Fa-f]+\s+([a-zA-Z0-9_]+)') {
+                        $defLines += "    $($Matches[1])"
+                    }
+                }
+                $defPath = Join-Path $libDir "libopenblas.def"
+                [System.IO.File]::WriteAllLines($defPath, $defLines)
+                $machineArg = if ($targetArch -eq "x86_64") { "/MACHINE:X64" } elseif ($targetArch -eq "arm64") { "/MACHINE:ARM64" } else { "/MACHINE:X86" }
+                & lib.exe "/DEF:$defPath" "/OUT:$blasLib" $machineArg
+                Write-Host "--> Created MSVC import library: $blasLib" -ForegroundColor Green
+            }
         }
     }
 
@@ -465,9 +473,11 @@ function Build-Target-Arch([string]$targetArch) {
             exit 1
         }
 
-        # Copy runtime DLLs
-        Get-ChildItem -Path "$OpenBLASDir\bin" -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
-            Copy-Item -Path $_.FullName -Destination $OutDir -Force
+        # Only copy runtime DLLs if static OpenBLAS is not available
+        if (-not (Test-Path "$OpenBLASDir\lib\libopenblas.a")) {
+            Get-ChildItem -Path "$OpenBLASDir\bin" -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
+                Copy-Item -Path $_.FullName -Destination $OutDir -Force
+            }
         }
 
         $dllSizeMB = [Math]::Round((Get-Item $dllOut).Length / 1MB, 2)
