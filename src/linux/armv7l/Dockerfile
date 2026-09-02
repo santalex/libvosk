@@ -22,7 +22,10 @@ RUN apt-get update -o Acquire::Retries=3 && \
         pkg-config \
         gcc-arm-linux-gnueabihf \
         g++-arm-linux-gnueabihf \
+        python3 \
     && rm -rf /var/lib/apt/lists/*
+
+COPY tools/slim_archive.py /opt/tools/slim_archive.py
 
 # 1. 编译 Linux ARM32 (armv7l) OpenFST 库
 RUN mkdir -p /opt/kaldi \
@@ -108,4 +111,5 @@ RUN cd /opt \
     && arm-linux-gnueabihf-strip --strip-debug *.o 2>/dev/null || true \
     && arm-linux-gnueabihf-ar rcs /opt/dist/linux/armv7l/libvosk.a *.o \
     && arm-linux-gnueabihf-ranlib /opt/dist/linux/armv7l/libvosk.a \
-    && rm -rf /opt/build_tmp
+    && rm -rf /opt/build_tmp \
+    && python3 /opt/tools/slim_archive.py /opt/dist/linux/armv7l/libvosk.a /opt/dist/linux/armv7l/libvosk.a --header /opt/dist/linux/armv7l/vosk_api.h --nm arm-linux-gnueabihf-nm --ar arm-linux-gnueabihf-ar

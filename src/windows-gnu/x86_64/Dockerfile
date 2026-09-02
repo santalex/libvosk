@@ -19,7 +19,10 @@ RUN apt-get update && \
         pkg-config \
         g++-mingw-w64-x86-64-posix \
         gfortran-mingw-w64-x86-64 \
+        python3 \
     && rm -rf /var/lib/apt/lists/*
+
+COPY tools/slim_archive.py /opt/tools/slim_archive.py
 
 # 1. 编译 Windows x86_64 OpenFST 库
 RUN mkdir -p /opt/kaldi \
@@ -90,6 +93,8 @@ RUN cd /opt \
     && cd /opt/build_tmp \
     && cp /opt/vosk-api/src/*.o . 2>/dev/null || true \
     && for lib in /opt/kaldi/kaldi/src/*/*.a /opt/kaldi/local/lib/*.a; do x86_64-w64-mingw32-ar x "$lib"; done \
+    && x86_64-w64-mingw32-strip --strip-debug *.o 2>/dev/null || true \
     && x86_64-w64-mingw32-ar rcs /opt/dist/windows-gnu/x86_64/libvosk.a *.o \
-    && cp -fv /opt/dist/windows-gnu/x86_64/libvosk.a /opt/dist/windows-gnu/x86_64/libvosk_static.lib \
-    && rm -rf /opt/build_tmp
+    && rm -rf /opt/build_tmp \
+    && python3 /opt/tools/slim_archive.py /opt/dist/windows-gnu/x86_64/libvosk.a /opt/dist/windows-gnu/x86_64/libvosk.a --header /opt/dist/windows-gnu/x86_64/vosk_api.h --nm x86_64-w64-mingw32-nm --ar x86_64-w64-mingw32-ar \
+    && cp -fv /opt/dist/windows-gnu/x86_64/libvosk.a /opt/dist/windows-gnu/x86_64/libvosk_static.lib

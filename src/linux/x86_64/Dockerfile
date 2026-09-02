@@ -11,6 +11,7 @@ RUN apt-get update -o Acquire::Retries=3 && \
     ca-certificates \
     g++ \
     gfortran \
+    python3 \
     bzip2 \
     unzip \
     make \
@@ -22,6 +23,8 @@ RUN apt-get update -o Acquire::Retries=3 && \
     libtool \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
+
+COPY tools/slim_archive.py /opt/tools/slim_archive.py
 
 # 1. 编译 Linux x86_64 OpenFST 库
 RUN mkdir -p /opt/kaldi \
@@ -82,7 +85,7 @@ RUN cd /opt \
     HAVE_MKL=0 \
     USE_SHARED=0 \
     EXTRA_CFLAGS="-O3 -DNDEBUG -g0 -ffunction-sections -fdata-sections -fPIC" \
-    EXTRA_LDFLAGS="-Wl,--gc-sections -Wl,-Bstatic -lgfortran -lquadmath -Wl,-Bdynamic" \
+    EXTRA_LDFLAGS="-Wl,--gc-sections -lgfortran" \
     && mkdir -p /opt/dist/linux/x86_64 \
     && cp -fv libvosk.so /opt/dist/linux/x86_64/libvosk.so \
     && strip --strip-all /opt/dist/linux/x86_64/libvosk.so \
@@ -106,12 +109,11 @@ RUN cd /opt \
         /opt/kaldi/kaldi/src/util/*.a \
         /opt/kaldi/kaldi/src/base/*.a \
         /opt/kaldi/local/lib/libfst*.a \
-        /opt/kaldi/local/lib/libopenblas.a \
-        /usr/lib/gcc/x86_64-linux-gnu/*/libgfortran.a \
-        /usr/lib/gcc/x86_64-linux-gnu/*/libquadmath.a; do \
+        /opt/kaldi/local/lib/libopenblas.a; do \
         [ -f "$lib" ] && ar x "$lib"; \
     done \
     && strip --strip-debug *.o 2>/dev/null || true \
     && ar rcs /opt/dist/linux/x86_64/libvosk.a *.o \
     && ranlib /opt/dist/linux/x86_64/libvosk.a \
-    && rm -rf /opt/build_tmp
+    && rm -rf /opt/build_tmp \
+    && python3 /opt/tools/slim_archive.py /opt/dist/linux/x86_64/libvosk.a /opt/dist/linux/x86_64/libvosk.a --header /opt/dist/linux/x86_64/vosk_api.h

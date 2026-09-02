@@ -20,7 +20,10 @@ RUN apt-get update -o Acquire::Retries=3 && \
         autoconf \
         libtool \
         pkg-config \
+        python3 \
     && rm -rf /var/lib/apt/lists/*
+
+COPY tools/slim_archive.py /opt/tools/slim_archive.py
 
 # 1. 下载并安装 Android NDK r25c
 RUN cd /opt && \
@@ -38,6 +41,7 @@ ENV CC=$TOOLCHAIN/bin/$TARGET$API-clang
 ENV CXX=$TOOLCHAIN/bin/$TARGET$API-clang++
 ENV RANLIB=$TOOLCHAIN/bin/llvm-ranlib
 ENV STRIP=$TOOLCHAIN/bin/llvm-strip
+ENV NM=$TOOLCHAIN/bin/llvm-nm
 
 # 2. 编译 Android x86_64 OpenFST 库
 RUN mkdir -p /opt/kaldi \
@@ -116,7 +120,8 @@ RUN cd /opt \
         /opt/kaldi/local/lib/libopenblas.a; do \
         [ -f "$lib" ] && $AR x "$lib"; \
     done \
+    && $STRIP --strip-debug *.o 2>/dev/null || true \
     && $AR rcs /opt/dist/android/x86_64/libvosk.a *.o \
-    && $STRIP --strip-unneeded -R .comment -R .note /opt/dist/android/x86_64/libvosk.a 2>/dev/null || true \
     && $RANLIB /opt/dist/android/x86_64/libvosk.a \
-    && rm -rf /opt/build_tmp
+    && rm -rf /opt/build_tmp \
+    && python3 /opt/tools/slim_archive.py /opt/dist/android/x86_64/libvosk.a /opt/dist/android/x86_64/libvosk.a --header /opt/dist/android/x86_64/vosk_api.h --nm $NM --ar $AR

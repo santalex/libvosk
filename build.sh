@@ -404,7 +404,7 @@ build_target_docker() {
     local IMAGE_TAG="reavox-vosk-${OS}-${ARCH}:latest"
     local CONTAINER_NAME="temp-reavox-${OS}-${ARCH}-$(date +%s)"
 
-    docker build --build-arg VOSK_TAG="${VOSK_TAG}" -t "${IMAGE_TAG}" -f "${DOCKERFILE}" "${DOCKER_DIR}"
+    docker build --build-arg VOSK_TAG="${VOSK_TAG}" -t "${IMAGE_TAG}" -f "${DOCKERFILE}" "${SCRIPT_DIR}"
 
     echo "--> 正在抽取产物 [${OS} - ${ARCH}] ..."
     docker create --name "${CONTAINER_NAME}" "${IMAGE_TAG}"

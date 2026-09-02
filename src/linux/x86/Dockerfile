@@ -22,6 +22,7 @@ RUN apt-get update -o Acquire::Retries=3 && \
         autoconf \
         libtool \
         pkg-config \
+        python3 \
     && ln -sf /usr/bin/g++ /usr/local/bin/i686-linux-gnu-c++ \
     && ln -sf /usr/bin/g++ /usr/local/bin/i686-linux-gnu-g++ \
     && ln -sf /usr/bin/gcc /usr/local/bin/i686-linux-gnu-gcc \
@@ -29,6 +30,8 @@ RUN apt-get update -o Acquire::Retries=3 && \
     && ln -sf /usr/bin/ranlib /usr/local/bin/i686-linux-gnu-ranlib \
     && ln -sf /usr/bin/strip /usr/local/bin/i686-linux-gnu-strip \
     && rm -rf /var/lib/apt/lists/*
+
+COPY tools/slim_archive.py /opt/tools/slim_archive.py
 
 
 # 1. 编译 Linux x86 (32-bit) OpenFST 库
@@ -111,4 +114,5 @@ RUN cd /opt \
     && strip --strip-debug *.o 2>/dev/null || true \
     && ar rcs /opt/dist/linux/x86/libvosk.a *.o \
     && ranlib /opt/dist/linux/x86/libvosk.a \
-    && rm -rf /opt/build_tmp
+    && rm -rf /opt/build_tmp \
+    && python3 /opt/tools/slim_archive.py /opt/dist/linux/x86/libvosk.a /opt/dist/linux/x86/libvosk.a --header /opt/dist/linux/x86/vosk_api.h

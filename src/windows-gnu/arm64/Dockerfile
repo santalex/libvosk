@@ -18,7 +18,10 @@ RUN apt-get update && \
         autoconf \
         libtool \
         pkg-config \
+        python3 \
     && rm -rf /var/lib/apt/lists/*
+
+COPY tools/slim_archive.py /opt/tools/slim_archive.py
 
 # 1. 安装 Windows ARM64 llvm-mingw 工具链
 RUN cd /opt && \
@@ -97,6 +100,8 @@ RUN cd /opt \
     && cd /opt/build_tmp \
     && cp /opt/vosk-api/src/*.o . 2>/dev/null || true \
     && for lib in /opt/kaldi/kaldi/src/*/*.a /opt/kaldi/local/lib/*.a; do aarch64-w64-mingw32-ar x "$lib"; done \
+    && aarch64-w64-mingw32-strip --strip-debug *.o 2>/dev/null || true \
     && aarch64-w64-mingw32-ar rcs /opt/dist/windows-gnu/arm64/libvosk.a *.o \
-    && cp -fv /opt/dist/windows-gnu/arm64/libvosk.a /opt/dist/windows-gnu/arm64/libvosk_static.lib \
-    && rm -rf /opt/build_tmp
+    && rm -rf /opt/build_tmp \
+    && python3 /opt/tools/slim_archive.py /opt/dist/windows-gnu/arm64/libvosk.a /opt/dist/windows-gnu/arm64/libvosk.a --header /opt/dist/windows-gnu/arm64/vosk_api.h --nm aarch64-w64-mingw32-nm --ar aarch64-w64-mingw32-ar \
+    && cp -fv /opt/dist/windows-gnu/arm64/libvosk.a /opt/dist/windows-gnu/arm64/libvosk_static.lib

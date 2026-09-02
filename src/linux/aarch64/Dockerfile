@@ -22,7 +22,10 @@ RUN apt-get update -o Acquire::Retries=3 && \
     pkg-config \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
+    python3 \
     && rm -rf /var/lib/apt/lists/*
+
+COPY tools/slim_archive.py /opt/tools/slim_archive.py
 
 # 1. 编译 Linux ARM64 OpenFST 库
 RUN mkdir -p /opt/kaldi \
@@ -108,4 +111,5 @@ RUN cd /opt \
     && aarch64-linux-gnu-strip --strip-debug *.o 2>/dev/null || true \
     && aarch64-linux-gnu-ar rcs /opt/dist/linux/aarch64/libvosk.a *.o \
     && aarch64-linux-gnu-ranlib /opt/dist/linux/aarch64/libvosk.a \
-    && rm -rf /opt/build_tmp
+    && rm -rf /opt/build_tmp \
+    && python3 /opt/tools/slim_archive.py /opt/dist/linux/aarch64/libvosk.a /opt/dist/linux/aarch64/libvosk.a --header /opt/dist/linux/aarch64/vosk_api.h --nm aarch64-linux-gnu-nm --ar aarch64-linux-gnu-ar
