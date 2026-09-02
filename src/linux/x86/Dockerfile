@@ -12,6 +12,8 @@ RUN apt-get update -o Acquire::Retries=3 && \
         g++ \
         g++-multilib \
         gcc-multilib \
+        gfortran \
+        gfortran-multilib \
         bzip2 \
         unzip \
         make \
@@ -46,11 +48,11 @@ RUN mkdir -p /opt/kaldi \
     && make -j $(nproc) \
     && make install
 
-# 2. 编译 Linux x86 (32-bit) OpenBLAS 核心数学库
+# 2. 编译 Linux x86 (32-bit) OpenBLAS 核心数学库 (包含完整 CBLAS + LAPACK)
 RUN cd /opt/kaldi \
     && git clone -b v0.3.20 --single-branch --depth=1 https://github.com/xianyi/OpenBLAS \
     && cd OpenBLAS \
-    && make HOSTCC=gcc BINARY=32 TARGET=PRESCOTT CFLAGS="-O3 -DNDEBUG -g0 -fPIC -m32 -msse -msse2 -mfpmath=sse" CXXFLAGS="-O3 -DNDEBUG -g0 -fPIC -m32 -msse -msse2 -mfpmath=sse" ONLY_CBLAS=1 DYNAMIC_ARCH=1 USE_LOCKING=1 USE_THREAD=0 NO_FORTRAN=1 NO_SHARED=1 -j $(nproc) \
+    && make HOSTCC=gcc BINARY=32 TARGET=PRESCOTT DYNAMIC_ARCH=1 USE_LOCKING=1 USE_THREAD=0 NO_SHARED=1 CFLAGS="-O3 -DNDEBUG -g0 -fPIC -m32 -msse -msse2 -mfpmath=sse" FFLAGS="-O3 -DNDEBUG -g0 -fPIC -m32 -msse -msse2 -mfpmath=sse" -j $(nproc) \
     && make PREFIX=/opt/kaldi/local NO_SHARED=1 install \
     && cd /opt/kaldi/local/lib \
     && ln -sf libopenblas.a libopenblas.so 2>/dev/null || true \
@@ -81,10 +83,11 @@ RUN cd /opt \
     && KALDI_ROOT=/opt/kaldi/kaldi OPENBLAS_ROOT=/opt/kaldi/local OPENFST_ROOT=/opt/kaldi/local EXT=so make -j $(nproc) \
             HAVE_ACCELERATE=0 \
             HAVE_OPENBLAS=1 \
+            HAVE_OPENBLAS_CLAPACK=1 \
             HAVE_MKL=0 \
             USE_SHARED=0 \
             EXTRA_CFLAGS="-O3 -DNDEBUG -g0 -ffunction-sections -fdata-sections -fPIC -m32 -msse -msse2 -mfpmath=sse" \
-            EXTRA_LDFLAGS="-m32 -Wl,--gc-sections" \
+            EXTRA_LDFLAGS="-m32 -Wl,--gc-sections -lgfortran" \
     && mkdir -p /opt/dist/linux/x86 \
     && cp -fv libvosk.so /opt/dist/linux/x86/libvosk.so \
     && strip --strip-all /opt/dist/linux/x86/libvosk.so \
