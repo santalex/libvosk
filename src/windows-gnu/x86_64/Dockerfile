@@ -42,7 +42,7 @@ RUN mkdir -p /opt/kaldi \
 RUN cd /opt/kaldi \
     && git clone -b v0.3.20 --single-branch --depth=1 https://github.com/xianyi/OpenBLAS \
     && cd OpenBLAS \
-    && make HOSTCC=gcc BINARY=64 CC=x86_64-w64-mingw32-gcc-posix AR=x86_64-w64-mingw32-ar ONLY_CBLAS=1 DYNAMIC_ARCH=1 TARGET=NEHALEM USE_LOCKING=1 USE_THREAD=0 -j $(nproc) \
+    && make HOSTCC=gcc BINARY=64 CC=x86_64-w64-mingw32-gcc-posix AR=x86_64-w64-mingw32-ar ONLY_CBLAS=1 TARGET=NEHALEM USE_LOCKING=1 USE_THREAD=0 -j $(nproc) \
     && make PREFIX=/opt/kaldi/local install
 
 # 3. 编译 Windows x86_64 CLAPACK 库 (提供 libf2c.a, libblas.a, liblapack.a)

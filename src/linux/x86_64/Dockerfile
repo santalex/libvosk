@@ -42,7 +42,7 @@ RUN mkdir -p /opt/kaldi \
 RUN cd /opt/kaldi \
     && git clone -b v0.3.20 --single-branch --depth=1 https://github.com/xianyi/OpenBLAS \
     && cd OpenBLAS \
-    && make HOSTCC=gcc BINARY=64 DYNAMIC_ARCH=1 USE_LOCKING=1 USE_THREAD=0 NO_SHARED=1 CFLAGS="-O3 -DNDEBUG -g0 -fPIC" FFLAGS="-O3 -DNDEBUG -g0 -fPIC" -j $(nproc) \
+    && make HOSTCC=gcc BINARY=64 TARGET=NEHALEM USE_LOCKING=1 USE_THREAD=0 NO_SHARED=1 CFLAGS="-O3 -DNDEBUG -g0 -fPIC" FFLAGS="-O3 -DNDEBUG -g0 -fPIC" -j $(nproc) \
     && make PREFIX=/opt/kaldi/local NO_SHARED=1 install \
     && mkdir -p /opt/kaldi/local/lib /opt/kaldi/local/lib64 \
     && (cp -rf /opt/kaldi/local/lib64/* /opt/kaldi/local/lib/ 2>/dev/null || true) \
