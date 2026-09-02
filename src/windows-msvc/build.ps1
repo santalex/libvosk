@@ -447,10 +447,12 @@ function Build-Target-Arch([string]$targetArch) {
         }
         # Automatically optimize static library with Transitive Symbol Reachability Slimmer
         $slimTool = Join-Path $ScriptDir "..\..\tools\slim_archive.py"
-        $headerFile = Join-Path "$voskDir\src" "vosk_api.h"
+        $headerFile = Join-Path "$VoskApiDir\src" "vosk_api.h"   # Fix: was $voskDir (undefined scope)
         if ((Test-Path $slimTool) -and (Test-Path $headerFile)) {
             Write-Host "--> Running slim_archive.py optimization on $staticOut..." -ForegroundColor Yellow
             python $slimTool $staticOut $staticOut --header $headerFile
+        } else {
+            Write-Warning "slim_archive.py or vosk_api.h not found, skipping slimming. slimTool=$slimTool headerFile=$headerFile"
         }
 
         Copy-Item -Path $staticOut -Destination $staticOutAlt -Force
