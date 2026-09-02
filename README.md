@@ -25,8 +25,8 @@ This repository provides an automated, hermetic, Docker-based multi-platform bui
 | **macOS** | `universal` *(macOS 11.0+)* | `libvosk-macos-universal-shared.zip` | `libvosk-macos-universal-static.zip` | `libvosk-macos-xcframework.zip` |
 | **iOS** | `universal` *(iOS 12.0+)* | - | `libvosk-ios-static.zip` (`.a`) | `libvosk-ios-xcframework.zip` |
 | **tvOS** | `universal` *(tvOS 12.0+)* | - | `libvosk-tvos-static.zip` (`.a`) | `libvosk-tvos-xcframework.zip` |
-| **watchOS** | `universal` *(watchOS 6.0+)* | - | `libvosk-watchos-static.zip` (`.a`) | `libvosk-watchos-xcframework.zip` |
-| **visionOS** | `universal` *(visionOS 1.0+)* | - | `libvosk-visionos-static.zip` (`.a`) | `libvosk-visionos-xcframework.zip` |
+| **~~watchOS~~** | `universal` *(watchOS 6.0+)* | - | `libvosk-watchos-static.zip` (`.a`) | `libvosk-watchos-xcframework.zip` |
+| **~~visionOS~~** | `universal` *(visionOS 1.0+)* | - | `libvosk-visionos-static.zip` (`.a`) | `libvosk-visionos-xcframework.zip` |
 | **Apple** | `universal` (macOS+iOS+tvOS+watchOS+visionOS) | - | - | `libvosk-apple-xcframework.zip` (Super `XCFramework`) |
 | **Windows (MSVC)** | `x86_64` | `libvosk-windows-msvc-x86_64-shared.zip` | `libvosk-windows-msvc-x86_64-static.zip` | - |
 | **Windows (MSVC)** | `arm64` | `libvosk-windows-msvc-arm64-shared.zip` | `libvosk-windows-msvc-arm64-static.zip` | - |
