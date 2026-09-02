@@ -45,7 +45,7 @@ RUN mkdir -p /opt/kaldi \
 RUN cd /opt/kaldi \
     && git clone -b v0.3.20 --single-branch --depth=1 https://github.com/xianyi/OpenBLAS \
     && cd OpenBLAS \
-    && make HOSTCC=gcc CC=arm-linux-gnueabihf-gcc FC=arm-linux-gnueabihf-gfortran TARGET=ARMV7 DYNAMIC_ARCH=0 USE_LOCKING=1 USE_THREAD=0 NO_SHARED=1 CFLAGS="-O3 -DNDEBUG -g0 -fPIC -mfpu=neon" FFLAGS="-O3 -DNDEBUG -g0 -fPIC -mfpu=neon" -j $(nproc) \
+    && make HOSTCC=gcc CROSS=1 CROSS_SUFFIX=arm-linux-gnueabihf- TARGET=ARMV7 DYNAMIC_ARCH=0 USE_LOCKING=1 USE_THREAD=0 NO_SHARED=1 CFLAGS="-O3 -DNDEBUG -g0 -fPIC -mfpu=neon" FFLAGS="-O3 -DNDEBUG -g0 -fPIC -mfpu=neon" -j $(nproc) \
     && make PREFIX=/opt/kaldi/local NO_SHARED=1 install \
     && cd /opt/kaldi/local/lib \
     && ln -sf libopenblas.a libopenblas.so 2>/dev/null || true \
