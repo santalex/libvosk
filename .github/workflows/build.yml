@@ -168,8 +168,12 @@ jobs:
            ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
             (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
         run: |
-          if [ "${{ matrix.os }}" = "macos" ]; then
-            ./tests/run_tests.sh dist/macos/${{ matrix.arch }}
+          if [ "${{ matrix.os }}" = "macos" ] && [ "${{ matrix.arch }}" = "arm64" ]; then
+            # arm64: runner 是 ARM 原生硬件，直接执行
+            ./tests/run_tests.sh dist/macos/arm64
+          elif [ "${{ matrix.os }}" = "macos" ] && [ "${{ matrix.arch }}" = "x86_64" ]; then
+            # x86_64: runner 是 macos-14 ARM，通过 Rosetta 2 执行 x86_64 二进制
+            arch -x86_64 ./tests/run_tests.sh dist/macos/x86_64
           elif [ "${{ matrix.os }}" = "linux" ] && [ "${{ matrix.arch }}" = "x86_64" ]; then
             ./tests/run_tests.sh dist/linux/x86_64
           fi
