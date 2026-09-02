@@ -24,13 +24,20 @@ RUN apt-get update -o Acquire::Retries=3 && \
     && rm -rf /var/lib/apt/lists/*
 
 COPY tools/slim_archive.py /opt/tools/slim_archive.py
+COPY cache /tmp/cache/
 
-# 1. 下载并安装 Android NDK r25c
+# 1. 安装 Android NDK r25c (优先使用本地缓存 /tmp/cache/android-ndk-r25c-linux.zip)
 RUN cd /opt && \
-    wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip \
+    if [ -f /tmp/cache/android-ndk-r25c-linux.zip ]; then \
+        echo "--> 使用本地缓存的 NDK 压缩包" && \
+        cp /tmp/cache/android-ndk-r25c-linux.zip ./; \
+    else \
+        echo "--> 本地无缓存，正在下载 Android NDK r25c..." && \
+        wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip; \
+    fi \
     && unzip -q android-ndk-r25c-linux.zip \
     && mv android-ndk-r25c android-ndk \
-    && rm -f android-ndk-r25c-linux.zip
+    && rm -rf android-ndk-r25c-linux.zip /tmp/cache/ 2>/dev/null || true
 
 ENV NDK=/opt/android-ndk
 ENV TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
@@ -122,5 +129,5 @@ RUN cd /opt \
     done \
     && $AR rcs /opt/dist/android/x86_64/libvosk.a *.o \
     && $RANLIB /opt/dist/android/x86_64/libvosk.a \
-    && python3 /opt/tools/slim_archive.py /opt/dist/android/x86_64/libvosk.a /opt/dist/android/x86_64/libvosk.so --ar $AR --nm $NM --ranlib $RANLIB \
+    && python3 /opt/tools/slim_archive.py /opt/dist/android/x86_64/libvosk.a /opt/dist/android/x86_64/libvosk.a --header /opt/dist/android/x86_64/vosk_api.h --ar $AR --nm $NM --ranlib $RANLIB \
     && rm -rf /opt/build_tmp

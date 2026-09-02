@@ -263,6 +263,7 @@ build_macos_static() {
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
     make -j$(sysctl -n hw.ncpu) \
+        recognizer.o language_model.o model.o spk_model.o vosk_api.o postprocessor.o \
         KALDI_ROOT="${KALDI_ROOT}" \
         OPENFST_ROOT="${KALDI_ROOT}/tools/openfst-1.8.0" \
         HAVE_ACCELERATE=1 \
@@ -309,6 +310,7 @@ build_ios_static() {
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
     make -j$(sysctl -n hw.ncpu) \
+        recognizer.o language_model.o model.o spk_model.o vosk_api.o postprocessor.o \
         KALDI_ROOT="${KALDI_ROOT}" \
         OPENFST_ROOT="${KALDI_ROOT}/tools/openfst-1.8.0" \
         HAVE_ACCELERATE=1 \
@@ -355,6 +357,7 @@ build_tvos_static() {
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
     make -j$(sysctl -n hw.ncpu) \
+        recognizer.o language_model.o model.o spk_model.o vosk_api.o postprocessor.o \
         KALDI_ROOT="${KALDI_ROOT}" \
         OPENFST_ROOT="${KALDI_ROOT}/tools/openfst-1.8.0" \
         HAVE_ACCELERATE=1 \
@@ -520,6 +523,7 @@ build_watchos_static() {
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
     make -j$(sysctl -n hw.ncpu) \
+        recognizer.o language_model.o model.o spk_model.o vosk_api.o postprocessor.o \
         KALDI_ROOT="${KALDI_ROOT}" \
         OPENFST_ROOT="${KALDI_ROOT}/tools/openfst-1.8.0" \
         HAVE_ACCELERATE=1 \
@@ -537,11 +541,19 @@ build_watchos_static() {
 
 build_watchos_all() {
     echo "--> 正在构建 watchOS 全量平台静态库与 XCFramework..."
+    mkdir -p "${SCRIPT_DIR}/dist/watchos/watchos_universal"
     mkdir -p "${SCRIPT_DIR}/dist/watchos/watchsimulator_universal"
 
     if [ -n "${WATCHOS_SDK_PATH}" ]; then
         build_watchos_static "watchos" "arm64_32" "${WATCHOS_SDK_PATH}" || true
         build_watchos_static "watchos" "arm64" "${WATCHOS_SDK_PATH}" || true
+
+        if [ -f "${SCRIPT_DIR}/dist/watchos/watchos_arm64_32/libvosk.a" ] && [ -f "${SCRIPT_DIR}/dist/watchos/watchos_arm64/libvosk.a" ]; then
+            lipo -create \
+                "${SCRIPT_DIR}/dist/watchos/watchos_arm64_32/libvosk.a" \
+                "${SCRIPT_DIR}/dist/watchos/watchos_arm64/libvosk.a" \
+                -output "${SCRIPT_DIR}/dist/watchos/watchos_universal/libvosk.a"
+        fi
     fi
     if [ -n "${WATCHSIMULATOR_SDK_PATH}" ]; then
         build_watchos_static "watchsimulator" "arm64" "${WATCHSIMULATOR_SDK_PATH}" || true
@@ -560,7 +572,9 @@ build_watchos_all() {
     rm -rf "${XCFRAMEWORK_DIR}"
     
     local XCF_ARGS=()
-    if [ -f "${SCRIPT_DIR}/dist/watchos/watchos_arm64_32/libvosk.a" ]; then
+    if [ -f "${SCRIPT_DIR}/dist/watchos/watchos_universal/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchos_universal/libvosk.a" -headers "${HEADERS_DIR}")
+    elif [ -f "${SCRIPT_DIR}/dist/watchos/watchos_arm64_32/libvosk.a" ]; then
         XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchos_arm64_32/libvosk.a" -headers "${HEADERS_DIR}")
     elif [ -f "${SCRIPT_DIR}/dist/watchos/watchos_arm64/libvosk.a" ]; then
         XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
@@ -604,6 +618,7 @@ build_visionos_static() {
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
     make -j$(sysctl -n hw.ncpu) \
+        recognizer.o language_model.o model.o spk_model.o vosk_api.o postprocessor.o \
         KALDI_ROOT="${KALDI_ROOT}" \
         OPENFST_ROOT="${KALDI_ROOT}/tools/openfst-1.8.0" \
         HAVE_ACCELERATE=1 \
@@ -675,7 +690,9 @@ build_apple_all() {
     if [ -f "${SCRIPT_DIR}/dist/tvos/appletvsimulator_universal/libvosk.a" ]; then
         XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/tvos/appletvsimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
     fi
-    if [ -f "${SCRIPT_DIR}/dist/watchos/watchos_arm64_32/libvosk.a" ]; then
+    if [ -f "${SCRIPT_DIR}/dist/watchos/watchos_universal/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchos_universal/libvosk.a" -headers "${HEADERS_DIR}")
+    elif [ -f "${SCRIPT_DIR}/dist/watchos/watchos_arm64_32/libvosk.a" ]; then
         XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchos_arm64_32/libvosk.a" -headers "${HEADERS_DIR}")
     elif [ -f "${SCRIPT_DIR}/dist/watchos/watchos_arm64/libvosk.a" ]; then
         XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchos_arm64/libvosk.a" -headers "${HEADERS_DIR}")

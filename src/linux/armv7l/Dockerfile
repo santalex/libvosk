@@ -111,5 +111,5 @@ RUN cd /opt \
     && arm-linux-gnueabihf-strip --strip-debug *.o 2>/dev/null || true \
     && arm-linux-gnueabihf-ar rcs /opt/dist/linux/armv7l/libvosk.a *.o \
     && arm-linux-gnueabihf-ranlib /opt/dist/linux/armv7l/libvosk.a \
-    && python3 /opt/tools/slim_archive.py /opt/dist/linux/armv7l/libvosk.a /opt/dist/linux/armv7l/libvosk.so --ar arm-linux-gnueabihf-ar --nm arm-linux-gnueabihf-nm --ranlib arm-linux-gnueabihf-ranlib \
+    && python3 /opt/tools/slim_archive.py /opt/dist/linux/armv7l/libvosk.a /opt/dist/linux/armv7l/libvosk.a --header /opt/dist/linux/armv7l/vosk_api.h --ar arm-linux-gnueabihf-ar --nm arm-linux-gnueabihf-nm --ranlib arm-linux-gnueabihf-ranlib \
     && rm -rf /opt/build_tmp

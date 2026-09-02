@@ -114,5 +114,5 @@ RUN cd /opt \
     && riscv64-linux-gnu-strip --strip-debug *.o 2>/dev/null || true \
     && riscv64-linux-gnu-ar rcs /opt/dist/linux/riscv64/libvosk.a *.o \
     && riscv64-linux-gnu-ranlib /opt/dist/linux/riscv64/libvosk.a \
-    && python3 /opt/tools/slim_archive.py /opt/dist/linux/riscv64/libvosk.a /opt/dist/linux/riscv64/libvosk.so --ar riscv64-linux-gnu-ar --nm riscv64-linux-gnu-nm --ranlib riscv64-linux-gnu-ranlib \
+    && python3 /opt/tools/slim_archive.py /opt/dist/linux/riscv64/libvosk.a /opt/dist/linux/riscv64/libvosk.a --header /opt/dist/linux/riscv64/vosk_api.h --ar riscv64-linux-gnu-ar --nm riscv64-linux-gnu-nm --ranlib riscv64-linux-gnu-ranlib \
     && rm -rf /opt/build_tmp

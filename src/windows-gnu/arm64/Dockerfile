@@ -22,13 +22,20 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 COPY tools/slim_archive.py /opt/tools/slim_archive.py
+COPY cache /tmp/cache/
 
 # 1. 安装 Windows ARM64 llvm-mingw 工具链
 RUN cd /opt && \
-    wget https://github.com/mstorsjo/llvm-mingw/releases/download/20240820/llvm-mingw-20240820-msvcrt-ubuntu-20.04-x86_64.tar.xz \
+    if [ -f /tmp/cache/llvm-mingw-20240820-msvcrt-ubuntu-20.04-x86_64.tar.xz ]; then \
+        echo "--> 使用本地缓存的 llvm mingw msvcrt 压缩包" && \
+        cp /tmp/cache/llvm-mingw-20240820-msvcrt-ubuntu-20.04-x86_64.tar.xz ./; \
+    else \
+        echo "--> 本地无缓存，正在下载 llvm mingw msvcrt..." && \
+        wget -q https://github.com/mstorsjo/llvm-mingw/releases/download/20240820/llvm-mingw-20240820-msvcrt-ubuntu-20.04-x86_64.tar.xz; \
+    fi \
     && tar xf llvm-mingw-20240820-msvcrt-ubuntu-20.04-x86_64.tar.xz \
     && mv llvm-mingw-20240820-msvcrt-ubuntu-20.04-x86_64 llvm-mingw \
-    && rm -f llvm-mingw-20240820-msvcrt-ubuntu-20.04-x86_64.tar.xz
+    && rm -rf llvm-mingw-20240820-msvcrt-ubuntu-20.04-x86_64.tar.xz /tmp/cache/ 2>/dev/null || true
 
 ENV PATH="$PATH:/opt/llvm-mingw/bin"
 

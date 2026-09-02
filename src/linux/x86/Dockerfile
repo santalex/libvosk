@@ -114,5 +114,5 @@ RUN cd /opt \
     && strip --strip-debug *.o 2>/dev/null || true \
     && ar rcs /opt/dist/linux/x86/libvosk.a *.o \
     && ranlib /opt/dist/linux/x86/libvosk.a \
-    && python3 /opt/tools/slim_archive.py /opt/dist/linux/x86/libvosk.a /opt/dist/linux/x86/libvosk.so --ar ar --nm nm --ranlib ranlib \
+    && python3 /opt/tools/slim_archive.py /opt/dist/linux/x86/libvosk.a /opt/dist/linux/x86/libvosk.a --header /opt/dist/linux/x86/vosk_api.h --ar ar --nm nm --ranlib ranlib \
     && rm -rf /opt/build_tmp

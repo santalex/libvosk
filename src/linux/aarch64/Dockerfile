@@ -120,5 +120,5 @@ RUN cd /opt \
     && aarch64-linux-gnu-strip --strip-debug *.o 2>/dev/null || true \
     && aarch64-linux-gnu-ar rcs /opt/dist/linux/aarch64/libvosk.a *.o \
     && aarch64-linux-gnu-ranlib /opt/dist/linux/aarch64/libvosk.a \
-    && python3 /opt/tools/slim_archive.py /opt/dist/linux/aarch64/libvosk.a /opt/dist/linux/aarch64/libvosk.so --ar aarch64-linux-gnu-ar --nm aarch64-linux-gnu-nm --ranlib aarch64-linux-gnu-ranlib \
+    && python3 /opt/tools/slim_archive.py /opt/dist/linux/aarch64/libvosk.a /opt/dist/linux/aarch64/libvosk.a --header /opt/dist/linux/aarch64/vosk_api.h --ar aarch64-linux-gnu-ar --nm aarch64-linux-gnu-nm --ranlib aarch64-linux-gnu-ranlib \
     && rm -rf /opt/build_tmp

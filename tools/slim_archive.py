@@ -139,22 +139,41 @@ def extract_ar_python(archive_path, output_dir):
 def extract_header_symbols(header_path):
     """从 vosk_api.h 自动提取所有 vosk_* 公开 API 符号"""
     root_symbols = set()
-    if not os.path.isfile(header_path):
-        return root_symbols
-    with open(header_path, 'r', encoding='utf-8', errors='ignore') as f:
-        for line in f:
-            line = line.strip()
-            if "vosk_" in line and "(" in line and not line.startswith("//"):
-                tokens = line.replace("(", " ").replace("*", " ").split()
-                for t in tokens:
-                    if t.startswith("vosk_"):
-                        clean_t = t.rstrip(");,")
-                        root_symbols.add(clean_t)
-                        root_symbols.add(f"_{clean_t}")
+    if header_path and os.path.isfile(str(header_path)):
+        try:
+            with open(header_path, 'r', encoding='utf-8', errors='ignore') as f:
+                for line in f:
+                    line = line.strip()
+                    if "vosk_" in line and "(" in line and not line.startswith("//"):
+                        tokens = line.replace("(", " ").replace("*", " ").split()
+                        for t in tokens:
+                            if t.startswith("vosk_"):
+                                clean_t = t.rstrip(");,")
+                                root_symbols.add(clean_t)
+                                root_symbols.add(f"_{clean_t}")
+        except Exception:
+            pass
+
+    if not root_symbols:
+        builtin = [
+            "vosk_model_new", "vosk_model_free", "vosk_model_find_word",
+            "vosk_spk_model_new", "vosk_spk_model_free",
+            "vosk_recognizer_new", "vosk_recognizer_new_spk", "vosk_recognizer_new_grm",
+            "vosk_recognizer_free", "vosk_recognizer_set_spk_model",
+            "vosk_recognizer_set_threshold", "vosk_recognizer_set_max_alternatives",
+            "vosk_recognizer_set_words", "vosk_recognizer_set_nlsml",
+            "vosk_recognizer_accept_waveform", "vosk_recognizer_accept_waveform_s",
+            "vosk_recognizer_accept_waveform_f", "vosk_recognizer_result",
+            "vosk_recognizer_partial_result", "vosk_recognizer_final_result",
+            "vosk_recognizer_reset", "vosk_set_log_level", "vosk_gpu_init", "vosk_gpu_thread_init"
+        ]
+        for s in builtin:
+            root_symbols.add(s)
+            root_symbols.add(f"_{s}")
     return root_symbols
 
 
-def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_tool="ar"):
+def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_tool="ar", ranlib_tool=None):
     start_time = time.time()
     input_path = Path(input_archive).resolve()
     output_path = Path(output_archive).resolve()
@@ -265,7 +284,9 @@ def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_to
                 chunk = kept_obj_paths[i:i + chunk_size]
                 subprocess.run([ar_tool, "rcs", str(output_path)] + chunk, check=True)
             try:
-                if sys.platform == "darwin":
+                if ranlib_tool:
+                    subprocess.run([ranlib_tool, str(output_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                elif sys.platform == "darwin":
                     subprocess.run(["strip", "-S", str(output_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
                     subprocess.run(["ranlib", "-no_warning_for_no_symbols", "-c", str(output_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
                 else:
@@ -295,6 +316,7 @@ if __name__ == "__main__":
     parser.add_argument("--header", default="src/apple/vosk-api/src/vosk_api.h", help="vosk_api.h 头文件路径")
     parser.add_argument("--nm", default="nm", help="nm 工具路径")
     parser.add_argument("--ar", default="ar", help="ar 工具路径")
+    parser.add_argument("--ranlib", default=None, help="ranlib 工具路径")
     
     args = parser.parse_args()
-    slim_archive(args.input, args.output, args.header, nm_tool=args.nm, ar_tool=args.ar)
+    slim_archive(args.input, args.output, args.header, nm_tool=args.nm, ar_tool=args.ar, ranlib_tool=args.ranlib)
