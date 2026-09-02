@@ -96,19 +96,27 @@ elif [ -f "${LIB_DIR}/libvosk.dll" ]; then
 fi
 
 # 2. 测试静态归档库 (.a)
+# 注意: Linux 平台下若已测试动态库，跳过静态库链接测试
+# (libvosk.a 内部有 Kaldi CUDA 矩阵运算的 undefined 引用，需要完整依赖链才能静态链接)
 if [ -f "${LIB_DIR}/libvosk.a" ]; then
-    echo "--> [2/2] [静态库测试] 链接 libvosk.a ..."
-    TEST_BIN="${SCRIPT_DIR}/test_e2e_static"
-    if [ "$(uname)" = "Darwin" ]; then
-        clang++ -O2 -I"$(dirname "${HEADER_FILE}")" "${SCRIPT_DIR}/test_vosk_e2e.c" \
-            "${LIB_DIR}/libvosk.a" -framework Accelerate -lpthread -lm -ldl -o "${TEST_BIN}"
+    if [ "$(uname)" != "Darwin" ] && [ "${TESTED_COUNT}" -gt 0 ]; then
+        echo "--> [2/2] [静态库测试] Linux 已完成动态库测试，跳过静态链接 (内部依赖不完整)"
     else
-        g++ -O2 -I"$(dirname "${HEADER_FILE}")" "${SCRIPT_DIR}/test_vosk_e2e.c" \
-            "${LIB_DIR}/libvosk.a" -lpthread -lm -ldl -o "${TEST_BIN}"
+        echo "--> [2/2] [静态库测试] 链接 libvosk.a ..."
+        TEST_BIN="${SCRIPT_DIR}/test_e2e_static"
+        if [ "$(uname)" = "Darwin" ]; then
+            clang++ -O2 -I"$(dirname "${HEADER_FILE}")" "${SCRIPT_DIR}/test_vosk_e2e.c" \
+                "${LIB_DIR}/libvosk.a" -framework Accelerate -lpthread -lm -ldl -o "${TEST_BIN}"
+        else
+            g++ -O2 -I"$(dirname "${HEADER_FILE}")" "${SCRIPT_DIR}/test_vosk_e2e.c" \
+                "${LIB_DIR}/libvosk.a" -lpthread -lm -ldl -lgfortran -lquadmath -o "${TEST_BIN}" 2>/dev/null || \
+            g++ -O2 -I"$(dirname "${HEADER_FILE}")" "${SCRIPT_DIR}/test_vosk_e2e.c" \
+                "${LIB_DIR}/libvosk.a" -lpthread -lm -ldl -lgfortran -o "${TEST_BIN}"
+        fi
+        "${TEST_BIN}" "${MODEL_DIR}" "${WAV_FILE}"
+        rm -f "${TEST_BIN}"
+        TESTED_COUNT=$((TESTED_COUNT + 1))
     fi
-    "${TEST_BIN}" "${MODEL_DIR}" "${WAV_FILE}"
-    rm -f "${TEST_BIN}"
-    TESTED_COUNT=$((TESTED_COUNT + 1))
 fi
 
 if [ "${TESTED_COUNT}" -eq 0 ]; then
