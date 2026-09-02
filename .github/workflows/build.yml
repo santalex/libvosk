@@ -71,14 +71,14 @@ jobs:
           - os: tvos
             arch: universal
             runner: macos-14
-          # watchOS
-          - os: watchos
-            arch: universal
-            runner: macos-14
-          # visionOS
-          - os: visionos
-            arch: universal
-            runner: macos-14
+          # watchOS (暂时禁用 - 构建尚不稳定)
+          # - os: watchos
+          #   arch: universal
+          #   runner: macos-14
+          # visionOS (暂时禁用 - 构建尚不稳定)
+          # - os: visionos
+          #   arch: universal
+          #   runner: macos-14
           # Windows (MSVC Native)
           - os: windows-msvc
             arch: x86_64
