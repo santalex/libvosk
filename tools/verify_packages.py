@@ -97,7 +97,10 @@ def check_file(filename):
                 if not has_init:
                     is_valid = False
                     reasons.append("Missing vosk/__init__.py")
-                if not has_lib:
+                # py3-none-any.whl 是纯 Python 包装器，仅在全平台最终打包时含动态库
+                # 单平台 CI run 中无动态库属正常情况，跳过此检查
+                is_any_wheel = filename.endswith("-py3-none-any.whl")
+                if not has_lib and not is_any_wheel:
                     is_valid = False
                     reasons.append("Missing dynamic library in wheel")
                 

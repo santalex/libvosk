@@ -321,23 +321,28 @@ package_all() {
             rm -rf tmp_os_build
         done
 
-        # C. Super Any Universal Wheel
-        echo "Packaging Super Universal Python Wheel -> libvosk-${VOSK_TAG//v/}-py3-none-any.whl ..."
-        rm -rf tmp_all_build && mkdir -p tmp_all_build/vosk/lib
-        cp -R src/python/vosk/* tmp_all_build/vosk/
-        cp src/python/setup.py tmp_all_build/
-        for dylib_path in $(find "${DIST_DIR}" -name "libvosk.dylib" -o -name "libvosk.so" -o -name "libvosk.dll" 2>/dev/null); do
-            target_sub=$(basename $(dirname "$dylib_path"))
-            os_sub=$(basename $(dirname $(dirname "$dylib_path")))
-            mkdir -p "tmp_all_build/vosk/lib/${os_sub}_${target_sub}"
-            cp -f "$dylib_path" "tmp_all_build/vosk/lib/${os_sub}_${target_sub}/"
-            if [ "$os_sub" = "windows" ]; then
-                find "$(dirname "$dylib_path")" -maxdepth 1 -name "*.dll" -exec cp -f {} "tmp_all_build/vosk/lib/${os_sub}_${target_sub}/" \; 2>/dev/null || true
-            fi
-        done
-        (cd tmp_all_build && VOSK_TAG="${VOSK_TAG}" python3 setup.py bdist_wheel --plat-name="any" >/dev/null 2>&1) || true
-        cp tmp_all_build/dist/*.whl "${PKG_DIR}/" 2>/dev/null || true
-        rm -rf tmp_all_build
+        # C. Super Any Universal Wheel (仅在找到至少一个动态库时生成)
+        _dylib_count=$(find "${DIST_DIR}" -name "libvosk.dylib" -o -name "libvosk.so" -o -name "libvosk.dll" 2>/dev/null | wc -l | tr -d ' ')
+        if [ "${_dylib_count}" -gt 0 ]; then
+            echo "Packaging Super Universal Python Wheel -> libvosk-${VOSK_TAG//v/}-py3-none-any.whl (${_dylib_count} dynamic libs) ..."
+            rm -rf tmp_all_build && mkdir -p tmp_all_build/vosk/lib
+            cp -R src/python/vosk/* tmp_all_build/vosk/
+            cp src/python/setup.py tmp_all_build/
+            for dylib_path in $(find "${DIST_DIR}" -name "libvosk.dylib" -o -name "libvosk.so" -o -name "libvosk.dll" 2>/dev/null); do
+                target_sub=$(basename $(dirname "$dylib_path"))
+                os_sub=$(basename $(dirname $(dirname "$dylib_path")))
+                mkdir -p "tmp_all_build/vosk/lib/${os_sub}_${target_sub}"
+                cp -f "$dylib_path" "tmp_all_build/vosk/lib/${os_sub}_${target_sub}/"
+                if [ "$os_sub" = "windows" ]; then
+                    find "$(dirname "$dylib_path")" -maxdepth 1 -name "*.dll" -exec cp -f {} "tmp_all_build/vosk/lib/${os_sub}_${target_sub}/" \; 2>/dev/null || true
+                fi
+            done
+            (cd tmp_all_build && VOSK_TAG="${VOSK_TAG}" python3 setup.py bdist_wheel --plat-name="any" >/dev/null 2>&1) || true
+            cp tmp_all_build/dist/*.whl "${PKG_DIR}/" 2>/dev/null || true
+            rm -rf tmp_all_build
+        else
+            echo "Skipping Super Universal Python Wheel (no dynamic libraries found in dist/)"
+        fi
     fi
 
     # 5. 生成 SHA256SUMS.txt
