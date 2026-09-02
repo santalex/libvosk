@@ -18,6 +18,16 @@ import sys
 import shutil
 import tempfile
 import subprocess
+
+# Windows 控制台默认 cp1252 编码无法输出中文字符，强制切换为 UTF-8
+# 避免 UnicodeEncodeError 导致 slim_archive 提前崩溃
+if sys.platform == "win32":
+    import io
+    if hasattr(sys.stdout, "buffer"):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "buffer"):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
 import argparse
 import time
 from pathlib import Path
