@@ -2,8 +2,8 @@ name: Auto Check Upstream Vosk API Tag
 
 on:
   schedule:
-    # 每天北京时间早上 08:00 (即 UTC 00:00) 自动触发检查
-    - cron: '0 0 * * *'
+    # 每周一北京时间早上 08:00 (即 UTC 00:00) 自动触发检查
+    - cron: '0 0 * * 1'
   workflow_dispatch:
 
 jobs:
