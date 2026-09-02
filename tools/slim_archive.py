@@ -23,34 +23,73 @@ import time
 from pathlib import Path
 
 
+def _record_symbol(bucket, sym_name):
+    bucket.add(sym_name)
+    if sym_name.startswith("_"):
+        bucket.add(sym_name[1:])
+
+
+def _classify_nm_symbol(sym_type, has_value):
+    """GNU/POSIX nm 类型字母 → defined / undefined。
+
+    必须覆盖 C++ ABI 常见情况，否则传递闭包会漏掉仍被引用的 .o：
+      V/v  vtable / typeinfo（weak object）
+      R/r  .rodata 常量（如 fst::internal::kSelectInByte）
+      W/w  weak 函数
+      u    GNU unique（定义，不是未定义）
+    无地址的 v/w 视为弱未定义引用。
+    """
+    if not sym_type:
+        return None
+    kind = sym_type[0]
+    if kind == "U":
+        return "undefined"
+    if kind in ("v", "w") and not has_value:
+        return "undefined"
+    if kind in "TtDdBbCcWwSsRrVvGgAau":
+        return "defined"
+    return None
+
+
 def parse_symbols_nm(obj_path, nm_tool="nm"):
     """使用 nm 解析 .o 文件的导出符号 (Defined) 与未解析引用 (Undefined)"""
     defined = set()
     undefined = set()
-    
+
     try:
-        # -g: 仅全局符号, -p: 无排序快速扫描
-        res = subprocess.run([nm_tool, "-g", "-p", str(obj_path)],
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+        # -g: 全局符号; -P: POSIX "name type [value [size]]"; -p: 不排序
+        res = subprocess.run(
+            [nm_tool, "-g", "-P", "-p", str(obj_path)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if res.returncode != 0:
+            res = subprocess.run(
+                [nm_tool, "-g", "-p", str(obj_path)],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
         for line in res.stdout.splitlines():
             parts = line.strip().split()
-            if len(parts) >= 2:
-                # 常见格式: "00000000 T _vosk_model_new" 或 "         U _fst_register"
-                sym_type = parts[-2]
-                sym_name = parts[-1]
-                
-                # 去除 macOS/Windows 下 C 符号开头的下划线 _ 前缀适配
-                norm_name = sym_name[1:] if sym_name.startswith('_') else sym_name
-                
-                if sym_type in ('U', 'u'):
-                    undefined.add(sym_name)
-                    undefined.add(norm_name)
-                elif sym_type in ('T', 't', 'D', 'd', 'B', 'b', 'C', 'c', 'W', 'w', 'S', 's'):
-                    defined.add(sym_name)
-                    defined.add(norm_name)
+            if len(parts) < 2:
+                continue
+
+            # POSIX: name type [value [size]]
+            # 个别 nm 仍输出 BSD: [value] type name
+            if len(parts[1]) == 1 and parts[1].isalpha():
+                sym_name, sym_type = parts[0], parts[1]
+                has_value = len(parts) >= 3
+            elif len(parts[0]) == 1 and parts[0].isalpha():
+                sym_type, sym_name = parts[0], parts[-1]
+                has_value = False
+            else:
+                sym_type, sym_name = parts[-2], parts[-1]
+                has_value = parts[0] not in ("U", "v", "w")
+
+            kind = _classify_nm_symbol(sym_type, has_value)
+            if kind == "undefined":
+                _record_symbol(undefined, sym_name)
+            elif kind == "defined":
+                _record_symbol(defined, sym_name)
     except Exception:
         pass
-    
+
     return defined, undefined
 
 
@@ -228,13 +267,18 @@ def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_to
             else:
                 defined, undef = parse_symbols_nm(obj, nm_tool=nm_tool)
             name_lower = obj.name.lower()
+            # C++ 工厂/vtable 与 OpenFST .rodata 常量表：文件名不含 fst，不能只靠 API 根符号
             is_root = (
                 any(sym in defined for sym in root_symbols) or
                 ("fst" in name_lower) or
                 ("ngram" in name_lower) or
                 ("cblas" in name_lower) or
                 ("clapack" in name_lower) or
-                ("f2c" in name_lower)
+                ("f2c" in name_lower) or
+                ("nnet-attention" in name_lower) or
+                ("clusterable" in name_lower) or
+                ("mapped-file" in name_lower) or
+                ("nthbit" in name_lower)
             )
             return obj, defined, undef, is_root
 
@@ -291,6 +335,7 @@ def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_to
                     subprocess.run(["ranlib", "-no_warning_for_no_symbols", "-c", str(output_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
                 else:
                     subprocess.run(["strip", "--strip-debug", str(output_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                    subprocess.run(["ranlib", str(output_path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
             except Exception:
                 pass
 
