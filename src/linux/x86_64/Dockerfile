@@ -67,7 +67,7 @@ RUN cd /opt/kaldi \
     --fst-root=/opt/kaldi/local --fst-version=1.8.0 \
     && if [ -f kaldi.mk ]; then sed -i 's/-g //g' kaldi.mk && sed -i 's/-O1/-O3 -DNDEBUG -g0 -ffunction-sections -fdata-sections/g' kaldi.mk; fi \
     && make depend -j \
-    && make -j $(nproc) online2 rnnlm
+    && make -j $(nproc) online2 rnnlm ivector transform chain
 
 # 4. 编译 Vosk API 并打包 Linux x86_64 目标产物 (libvosk.so, libvosk.a, vosk_api.h)
 ARG VOSK_TAG=v0.3.50
@@ -96,6 +96,9 @@ RUN cd /opt \
     && for lib in \
         /opt/kaldi/kaldi/src/online2/*.a \
         /opt/kaldi/kaldi/src/decoder/*.a \
+        /opt/kaldi/kaldi/src/ivector/*.a \
+        /opt/kaldi/kaldi/src/transform/*.a \
+        /opt/kaldi/kaldi/src/chain/*.a \
         /opt/kaldi/kaldi/src/gmm/*.a \
         /opt/kaldi/kaldi/src/tree/*.a \
         /opt/kaldi/kaldi/src/feat/*.a \
@@ -104,6 +107,7 @@ RUN cd /opt \
         /opt/kaldi/kaldi/src/rnnlm/*.a \
         /opt/kaldi/kaldi/src/hmm/*.a \
         /opt/kaldi/kaldi/src/nnet3/*.a \
+        /opt/kaldi/kaldi/src/cudamatrix/*.a \
         /opt/kaldi/kaldi/src/matrix/*.a \
         /opt/kaldi/kaldi/src/fstext/*.a \
         /opt/kaldi/kaldi/src/util/*.a \
