@@ -22,7 +22,6 @@ RUN apt-get update -o Acquire::Retries=3 && \
     pkg-config \
     gcc-riscv64-linux-gnu \
     g++-riscv64-linux-gnu \
-    gfortran-riscv64-linux-gnu \
     python3 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -41,11 +40,11 @@ RUN mkdir -p /opt/kaldi \
     && make -j $(nproc) \
     && make install
 
-# 2. 编译 Linux RISC-V 64 OpenBLAS 核心数学库 (包含完整 CBLAS + LAPACK)
+# 2. 编译 Linux RISC-V 64 OpenBLAS 核心数学库
 RUN cd /opt/kaldi \
     && git clone -b v0.3.20 --single-branch --depth=1 https://github.com/xianyi/OpenBLAS \
     && cd OpenBLAS \
-    && make HOSTCC=gcc CROSS=1 CROSS_SUFFIX=riscv64-linux-gnu- TARGET=RISCV64_GENERIC DYNAMIC_ARCH=0 USE_LOCKING=1 USE_THREAD=0 NO_SHARED=1 CFLAGS="-O3 -DNDEBUG -g0 -fPIC" FFLAGS="-O3 -DNDEBUG -g0 -fPIC" -j $(nproc) \
+    && make HOSTCC=gcc CC=riscv64-linux-gnu-gcc TARGET=RISCV64_GENERIC DYNAMIC_ARCH=0 ONLY_CBLAS=1 USE_LOCKING=1 USE_THREAD=0 NO_FORTRAN=1 NO_SHARED=1 CFLAGS="-O3 -DNDEBUG -g0 -fPIC" -j $(nproc) \
     && make PREFIX=/opt/kaldi/local NO_SHARED=1 install \
     && cd /opt/kaldi/local/lib \
     && ln -sf libopenblas.a libopenblas.so 2>/dev/null || true \
@@ -82,11 +81,10 @@ RUN cd /opt \
     KALDI_ROOT=/opt/kaldi/kaldi OPENBLAS_ROOT=/opt/kaldi/local OPENFST_ROOT=/opt/kaldi/local EXT=so make -j $(nproc) \
     HAVE_ACCELERATE=0 \
     HAVE_OPENBLAS=1 \
-    HAVE_OPENBLAS_CLAPACK=1 \
     HAVE_MKL=0 \
     USE_SHARED=0 \
     EXTRA_CFLAGS="-O3 -DNDEBUG -g0 -ffunction-sections -fdata-sections -fPIC" \
-    EXTRA_LDFLAGS="-Wl,--gc-sections -lgfortran" \
+    EXTRA_LDFLAGS="-Wl,--gc-sections" \
     && mkdir -p /opt/dist/linux/riscv64 \
     && cp -fv libvosk.so /opt/dist/linux/riscv64/libvosk.so \
     && riscv64-linux-gnu-strip --strip-all /opt/dist/linux/riscv64/libvosk.so \
@@ -116,5 +114,5 @@ RUN cd /opt \
     && riscv64-linux-gnu-strip --strip-debug *.o 2>/dev/null || true \
     && riscv64-linux-gnu-ar rcs /opt/dist/linux/riscv64/libvosk.a *.o \
     && riscv64-linux-gnu-ranlib /opt/dist/linux/riscv64/libvosk.a \
-    && rm -rf /opt/build_tmp \
-    && python3 /opt/tools/slim_archive.py /opt/dist/linux/riscv64/libvosk.a /opt/dist/linux/riscv64/libvosk.a --header /opt/dist/linux/riscv64/vosk_api.h --nm riscv64-linux-gnu-nm --ar riscv64-linux-gnu-ar
+    && python3 /opt/tools/slim_archive.py /opt/dist/linux/riscv64/libvosk.a /opt/dist/linux/riscv64/libvosk.so --ar riscv64-linux-gnu-ar --nm riscv64-linux-gnu-nm --ranlib riscv64-linux-gnu-ranlib \
+    && rm -rf /opt/build_tmp

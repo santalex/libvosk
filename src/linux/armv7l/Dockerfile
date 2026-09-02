@@ -22,7 +22,6 @@ RUN apt-get update -o Acquire::Retries=3 && \
         pkg-config \
         gcc-arm-linux-gnueabihf \
         g++-arm-linux-gnueabihf \
-        gfortran-arm-linux-gnueabihf \
         python3 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -41,11 +40,11 @@ RUN mkdir -p /opt/kaldi \
         && make -j $(nproc) \
         && make install
 
-# 2. 编译 Linux ARM32 (armv7l) OpenBLAS 核心数学库 (包含完整 CBLAS + LAPACK)
+# 2. 编译 Linux ARM32 (armv7l) OpenBLAS 核心数学库
 RUN cd /opt/kaldi \
     && git clone -b v0.3.20 --single-branch --depth=1 https://github.com/xianyi/OpenBLAS \
     && cd OpenBLAS \
-    && make HOSTCC=gcc CROSS=1 CROSS_SUFFIX=arm-linux-gnueabihf- TARGET=ARMV7 DYNAMIC_ARCH=0 USE_LOCKING=1 USE_THREAD=0 NO_SHARED=1 CFLAGS="-O3 -DNDEBUG -g0 -fPIC -mfpu=neon" FFLAGS="-O3 -DNDEBUG -g0 -fPIC -mfpu=neon" -j $(nproc) \
+    && make HOSTCC=gcc CC=arm-linux-gnueabihf-gcc TARGET=ARMV7 DYNAMIC_ARCH=0 ONLY_CBLAS=1 USE_LOCKING=1 USE_THREAD=0 NO_FORTRAN=1 NO_SHARED=1 CFLAGS="-O3 -DNDEBUG -g0 -fPIC -mfpu=neon" -j $(nproc) \
     && make PREFIX=/opt/kaldi/local NO_SHARED=1 install \
     && cd /opt/kaldi/local/lib \
     && ln -sf libopenblas.a libopenblas.so 2>/dev/null || true \
@@ -79,11 +78,10 @@ RUN cd /opt \
         KALDI_ROOT=/opt/kaldi/kaldi OPENBLAS_ROOT=/opt/kaldi/local OPENFST_ROOT=/opt/kaldi/local EXT=so make -j $(nproc) \
             HAVE_ACCELERATE=0 \
             HAVE_OPENBLAS=1 \
-            HAVE_OPENBLAS_CLAPACK=1 \
             HAVE_MKL=0 \
             USE_SHARED=0 \
             EXTRA_CFLAGS="-O3 -DNDEBUG -g0 -ffunction-sections -fdata-sections -fPIC -mfpu=neon" \
-            EXTRA_LDFLAGS="-Wl,--gc-sections -lgfortran" \
+            EXTRA_LDFLAGS="-Wl,--gc-sections" \
     && mkdir -p /opt/dist/linux/armv7l \
     && cp -fv libvosk.so /opt/dist/linux/armv7l/libvosk.so \
     && arm-linux-gnueabihf-strip --strip-all /opt/dist/linux/armv7l/libvosk.so \
@@ -113,5 +111,5 @@ RUN cd /opt \
     && arm-linux-gnueabihf-strip --strip-debug *.o 2>/dev/null || true \
     && arm-linux-gnueabihf-ar rcs /opt/dist/linux/armv7l/libvosk.a *.o \
     && arm-linux-gnueabihf-ranlib /opt/dist/linux/armv7l/libvosk.a \
-    && rm -rf /opt/build_tmp \
-    && python3 /opt/tools/slim_archive.py /opt/dist/linux/armv7l/libvosk.a /opt/dist/linux/armv7l/libvosk.a --header /opt/dist/linux/armv7l/vosk_api.h --nm arm-linux-gnueabihf-nm --ar arm-linux-gnueabihf-ar
+    && python3 /opt/tools/slim_archive.py /opt/dist/linux/armv7l/libvosk.a /opt/dist/linux/armv7l/libvosk.so --ar arm-linux-gnueabihf-ar --nm arm-linux-gnueabihf-nm --ranlib arm-linux-gnueabihf-ranlib \
+    && rm -rf /opt/build_tmp

@@ -37,10 +37,8 @@ ENV TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
 ENV TARGET=aarch64-linux-android
 ENV API=21
 ENV AR=$TOOLCHAIN/bin/llvm-ar
-ENV AS=$TOOLCHAIN/bin/llvm-as
 ENV CC=$TOOLCHAIN/bin/$TARGET$API-clang
 ENV CXX=$TOOLCHAIN/bin/$TARGET$API-clang++
-ENV LD=$TOOLCHAIN/bin/ld
 ENV RANLIB=$TOOLCHAIN/bin/llvm-ranlib
 ENV STRIP=$TOOLCHAIN/bin/llvm-strip
 ENV NM=$TOOLCHAIN/bin/llvm-nm
@@ -123,8 +121,7 @@ RUN cd /opt \
         /opt/kaldi/local/lib/libopenblas.a; do \
         [ -f "$lib" ] && $AR x "$lib"; \
     done \
-    && $STRIP --strip-debug *.o 2>/dev/null || true \
     && $AR rcs /opt/dist/android/arm64-v8a/libvosk.a *.o \
     && $RANLIB /opt/dist/android/arm64-v8a/libvosk.a \
-    && rm -rf /opt/build_tmp \
-    && python3 /opt/tools/slim_archive.py /opt/dist/android/arm64-v8a/libvosk.a /opt/dist/android/arm64-v8a/libvosk.a --header /opt/dist/android/arm64-v8a/vosk_api.h --nm $NM --ar $AR
+    && python3 /opt/tools/slim_archive.py /opt/dist/android/arm64-v8a/libvosk.a /opt/dist/android/arm64-v8a/libvosk.so --ar $AR --nm $NM --ranlib $RANLIB \
+    && rm -rf /opt/build_tmp

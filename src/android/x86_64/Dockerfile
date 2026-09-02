@@ -120,8 +120,7 @@ RUN cd /opt \
         /opt/kaldi/local/lib/libopenblas.a; do \
         [ -f "$lib" ] && $AR x "$lib"; \
     done \
-    && $STRIP --strip-debug *.o 2>/dev/null || true \
     && $AR rcs /opt/dist/android/x86_64/libvosk.a *.o \
     && $RANLIB /opt/dist/android/x86_64/libvosk.a \
-    && rm -rf /opt/build_tmp \
-    && python3 /opt/tools/slim_archive.py /opt/dist/android/x86_64/libvosk.a /opt/dist/android/x86_64/libvosk.a --header /opt/dist/android/x86_64/vosk_api.h --nm $NM --ar $AR
+    && python3 /opt/tools/slim_archive.py /opt/dist/android/x86_64/libvosk.a /opt/dist/android/x86_64/libvosk.so --ar $AR --nm $NM --ranlib $RANLIB \
+    && rm -rf /opt/build_tmp

@@ -22,7 +22,6 @@ RUN apt-get update -o Acquire::Retries=3 && \
     pkg-config \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
-    gfortran-aarch64-linux-gnu \
     python3 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -41,13 +40,21 @@ RUN mkdir -p /opt/kaldi \
     && make -j $(nproc) \
     && make install
 
-# 2. 编译 Linux ARM64 OpenBLAS 核心数学库 (包含完整 CBLAS + LAPACK)
+# 2. 编译 Linux ARM64 OpenBLAS 核心数学库
 RUN cd /opt/kaldi \
     && git clone -b v0.3.20 --single-branch --depth=1 https://github.com/xianyi/OpenBLAS \
     && cd OpenBLAS \
-    && make HOSTCC=gcc CROSS=1 CROSS_SUFFIX=aarch64-linux-gnu- TARGET=ARMV8 DYNAMIC_ARCH=1 USE_LOCKING=1 USE_THREAD=0 NO_SHARED=1 CFLAGS="-O3 -DNDEBUG -g0 -fPIC" FFLAGS="-O3 -DNDEBUG -g0 -fPIC" -j $(nproc) \
+    && make HOSTCC=gcc CC=aarch64-linux-gnu-gcc TARGET=ARMV8 DYNAMIC_ARCH=1 ONLY_CBLAS=1 USE_LOCKING=1 USE_THREAD=0 NO_FORTRAN=1 NO_SHARED=1 CFLAGS="-O3 -DNDEBUG -g0 -fPIC" -j $(nproc) \
     && make PREFIX=/opt/kaldi/local NO_SHARED=1 install \
+    && mkdir -p /opt/kaldi/local/lib /opt/kaldi/local/lib64 \
+    && (cp -rf /opt/kaldi/local/lib64/* /opt/kaldi/local/lib/ 2>/dev/null || true) \
+    && (cp -rf /opt/kaldi/local/lib/* /opt/kaldi/local/lib64/ 2>/dev/null || true) \
     && cd /opt/kaldi/local/lib \
+    && ln -sf libopenblas.a libopenblas.so 2>/dev/null || true \
+    && ln -sf libopenblas.a liblapack.a 2>/dev/null || true \
+    && ln -sf libopenblas.a libblas.a 2>/dev/null || true \
+    && ln -sf libopenblas.a libf2c.a 2>/dev/null || true \
+    && cd /opt/kaldi/local/lib64 \
     && ln -sf libopenblas.a libopenblas.so 2>/dev/null || true \
     && ln -sf libopenblas.a liblapack.a 2>/dev/null || true \
     && ln -sf libopenblas.a libblas.a 2>/dev/null || true \
@@ -79,11 +86,10 @@ RUN cd /opt \
     KALDI_ROOT=/opt/kaldi/kaldi OPENBLAS_ROOT=/opt/kaldi/local OPENFST_ROOT=/opt/kaldi/local EXT=so make -j $(nproc) \
     HAVE_ACCELERATE=0 \
     HAVE_OPENBLAS=1 \
-    HAVE_OPENBLAS_CLAPACK=1 \
     HAVE_MKL=0 \
     USE_SHARED=0 \
     EXTRA_CFLAGS="-O3 -DNDEBUG -g0 -ffunction-sections -fdata-sections -fPIC" \
-    EXTRA_LDFLAGS="-Wl,--gc-sections -lgfortran" \
+    EXTRA_LDFLAGS="-Wl,--gc-sections" \
     && mkdir -p /opt/dist/linux/aarch64 \
     && cp -fv libvosk.so /opt/dist/linux/aarch64/libvosk.so \
     && aarch64-linux-gnu-strip --strip-all /opt/dist/linux/aarch64/libvosk.so \
@@ -107,11 +113,12 @@ RUN cd /opt \
         /opt/kaldi/kaldi/src/util/*.a \
         /opt/kaldi/kaldi/src/base/*.a \
         /opt/kaldi/local/lib/libfst*.a \
-        /opt/kaldi/local/lib/libopenblas.a; do \
+        /opt/kaldi/local/lib/libopenblas*.a \
+        /opt/kaldi/local/lib64/libopenblas*.a; do \
         [ -f "$lib" ] && aarch64-linux-gnu-ar x "$lib"; \
     done \
     && aarch64-linux-gnu-strip --strip-debug *.o 2>/dev/null || true \
     && aarch64-linux-gnu-ar rcs /opt/dist/linux/aarch64/libvosk.a *.o \
     && aarch64-linux-gnu-ranlib /opt/dist/linux/aarch64/libvosk.a \
-    && rm -rf /opt/build_tmp \
-    && python3 /opt/tools/slim_archive.py /opt/dist/linux/aarch64/libvosk.a /opt/dist/linux/aarch64/libvosk.a --header /opt/dist/linux/aarch64/vosk_api.h --nm aarch64-linux-gnu-nm --ar aarch64-linux-gnu-ar
+    && python3 /opt/tools/slim_archive.py /opt/dist/linux/aarch64/libvosk.a /opt/dist/linux/aarch64/libvosk.so --ar aarch64-linux-gnu-ar --nm aarch64-linux-gnu-nm --ranlib aarch64-linux-gnu-ranlib \
+    && rm -rf /opt/build_tmp
