@@ -430,13 +430,14 @@ build_apple_native() {
     fi
     VOSK_TAG="${VOSK_TAG}" bash "${SCRIPT_DIR}/src/apple/build.sh" "${PLATFORM}" "${ARCH_ARG}"
 
-    echo "--> 正在抽取同步 Apple 目标二进制产物到根目录 dist/apple/ ..."
+    echo "--> 正在抽取同步 Apple 目标二进制产物到根目录 dist/ 及 dist/apple/ ..."
     local APPLE_DIST_SRC="${SCRIPT_DIR}/src/apple/dist"
-    local ROOT_DIST_DST="${SCRIPT_DIR}/dist/apple"
+    local ROOT_DIST_DST="${SCRIPT_DIR}/dist"
 
     if [ -d "${APPLE_DIST_SRC}" ]; then
-        mkdir -p "${ROOT_DIST_DST}"
+        mkdir -p "${ROOT_DIST_DST}" "${ROOT_DIST_DST}/apple"
         cp -Rf "${APPLE_DIST_SRC}/"* "${ROOT_DIST_DST}/" 2>/dev/null || true
+        cp -Rf "${APPLE_DIST_SRC}/"* "${ROOT_DIST_DST}/apple/" 2>/dev/null || true
         rm -rf "${APPLE_DIST_SRC}"
     fi
 
