@@ -17,6 +17,8 @@ tests/spk/
 tests/test_e2e_*
 tests/*.zip
 !tests/test.wav
+!tests/asr.zip
+!tests/spk.zip
 tools/__pycache__
 
 # OS / Editor Junk Files
