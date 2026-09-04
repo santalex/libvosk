@@ -144,8 +144,8 @@ package_all() {
 
             # B. Static Library Package (.a / .lib + header)
             mkdir -p tmp_static
-            find "$dir" -maxdepth 3 \( -name "*.a" -o -name "vosk.lib" \) -not -name "libvosk.lib" -exec cp -f {} tmp_static/ \; 2>/dev/null || true
-            if [ -n "$(find tmp_static -type f \( -name "*.a" -o -name "vosk.lib" \) 2>/dev/null)" ]; then
+            find "$dir" -maxdepth 3 \( -name "*.a" -o -name "*static*.lib" -o -name "vosk.lib" \) -not -name "libvosk.lib" -exec cp -f {} tmp_static/ \; 2>/dev/null || true
+            if [ -n "$(find tmp_static -type f \( -name "*.a" -o -name "*static*.lib" -o -name "vosk.lib" \) 2>/dev/null)" ]; then
                 find "$dir" -maxdepth 3 -name "vosk_api.h" -exec cp -f {} tmp_static/ \; 2>/dev/null || true
                 if [ ! -f tmp_static/vosk_api.h ]; then
                     find "${DIST_DIR}" -maxdepth 3 -name "vosk_api.h" -exec cp -f {} tmp_static/ \; 2>/dev/null || true
