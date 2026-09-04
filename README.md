@@ -124,6 +124,20 @@ python3 tools/slim_archive.py dist/macos/arm64/libvosk.a dist/macos/arm64/libvos
 ### GPU Acceleration (NVIDIA CUDA)
 For NVIDIA GPU acceleration on Linux/Windows, CUDA dynamic linking requires compiling against CUDA Toolkit headers. Instructions and Docker build flags can be found in `src/linux/x86_64/Dockerfile`.
 
+## Conceptual Vision: Context-Aware Voice Control
+
+With ultra-slim static binaries (~19MB) and sub-20ms local decoding, Vosk unlocks next-generation hands-free interaction paradigms across emerging Apple platforms:
+
+### 1. Spatial Computing (visionOS): Gaze-Directed Instant Voice Interaction
+- **Gaze + Contextual Voice**: When a user gazes at an active spatial window or 3D object, the app can dynamically constrain speech recognition strictly to relevant contextual commands.
+- **Zero Pinch Fatigue**: Enables effortless, hands-free interaction without physical gesture fatigue, while inherently filtering out ambient background conversations.
+- **Zero Cloud Latency**: Instantaneous on-device response without roundtrip network delays or cloud API costs.
+
+### 2. Ambient Living Room (tvOS): Hands-Free Media Navigation
+- **Microphone Input via AirPods or Continuity**: Powered by connected AirPods or tvOS 17+ Continuity Microphone (leveraging an iPhone / iPad as an ambient wireless microphone).
+- **Replacing Clunky Remotes**: High-frequency commands (playback control, scrubbing, fast-forwarding, menu navigation) trigger instantly without tedious directional pad typing.
+- **Total Privacy & Offline Reliability**: Speech audio is processed entirely on the local device, never leaving the living room.
+
 ---
 
 ## Disclaimer & License
