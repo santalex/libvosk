@@ -229,11 +229,29 @@ function Build-Target-Arch([string]$targetArch) {
             exit 1
         }
         
-        & cmake.exe --build $clapackBuildDir --config Release --target f2c blas lapack -j $env:NUMBER_OF_PROCESSORS
+        & cmake.exe --build $clapackBuildDir --config Release --target f2c blas lapack -j $env:NUMBER_OF_PROCESSORS -- /nologo /verbosity:quiet
         if ($LASTEXITCODE -ne 0) {
             Write-Error "CLAPACK CMake build failed with exit code $LASTEXITCODE"
             exit 1
         }
+    }
+
+    # Helper function: Compile with cl.exe quietly (only display warning and error lines)
+    function Invoke-ClQuiet {
+        param([string[]]$ArgsList)
+        $output = & cl.exe $ArgsList 2>&1
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -ne 0) {
+            $output | ForEach-Object { Write-Host $_ -ForegroundColor Red }
+            return $exitCode
+        }
+        $output | ForEach-Object {
+            $line = $_.ToString()
+            if ($line -match '(?i)warning|error') {
+                Write-Host $line
+            }
+        }
+        return 0
     }
 
     $f2cLibObj = (Get-ChildItem -Path "$clapackBuildDir\F2CLIBS" -Recurse -Filter "*f2c*.lib" | Select-Object -First 1).FullName
@@ -279,9 +297,9 @@ function Build-Target-Arch([string]$targetArch) {
 
     Push-Location $fstObjDir
     try {
-        & cl.exe $fstClArgs $fstCcFiles
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "OpenFST compilation failed with exit code $LASTEXITCODE"
+        $rc = Invoke-ClQuiet ($fstClArgs + $fstCcFiles)
+        if ($rc -ne 0) {
+            Write-Error "OpenFST compilation failed with exit code $rc"
             exit 1
         }
     } finally {
@@ -368,9 +386,9 @@ function Build-Target-Arch([string]$targetArch) {
                     $currentClArgs = $clArgs + $batch
                     Push-Location $mObjDir
                     try {
-                        & cl.exe $currentClArgs
-                        if ($LASTEXITCODE -ne 0) {
-                            Write-Error "Kaldi module $m batch compilation failed with exit code $LASTEXITCODE"
+                        $rc = Invoke-ClQuiet $currentClArgs
+                        if ($rc -ne 0) {
+                            Write-Error "Kaldi module $m batch compilation failed with exit code $rc"
                             exit 1
                         }
                     } finally {
@@ -412,9 +430,9 @@ function Build-Target-Arch([string]$targetArch) {
     New-Item -ItemType Directory -Path $voskObjDir -Force | Out-Null
     Push-Location $voskObjDir
     try {
-        & cl.exe $clArgs $voskCcFiles
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "Vosk API compilation failed with exit code $LASTEXITCODE"
+        $rc = Invoke-ClQuiet ($clArgs + $voskCcFiles)
+        if ($rc -ne 0) {
+            Write-Error "Vosk API compilation failed with exit code $rc"
             exit 1
         }
     } finally {

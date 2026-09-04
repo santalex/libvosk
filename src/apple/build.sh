@@ -93,7 +93,7 @@ prepare_dependencies() {
         echo "--> 正在为 Apple 平台编译 OpenFST..."
         cd kaldi/tools
         git clone --depth=1 https://github.com/alphacep/openfst openfst-1.8.0
-        make openfst
+        make -s openfst
         cd "${SCRIPT_DIR}"
     fi
 
@@ -126,7 +126,7 @@ compile_openfst() {
     fi
     rm -f openfst-1.8.0/Makefile || true
 
-    make -j$(sysctl -n hw.ncpu) openfst \
+    make -s -j$(sysctl -n hw.ncpu) openfst \
         OPENFST_CONFIGURE="${HOST_FLAGS} --enable-static --enable-shared --enable-far --enable-ngram-fsts --enable-lookahead-fsts --with-pic" \
         CXXFLAGS="-O3 ${ARCH_FLAGS}" CFLAGS="-O3 ${ARCH_FLAGS}" LDFLAGS="${ARCH_FLAGS}"
 }
@@ -151,9 +151,9 @@ compile_kaldi() {
     if [ -f kaldi.mk ]; then
         sed -i '' 's/-msse -msse2//g' kaldi.mk
     fi
-    make depend -j$(sysctl -n hw.ncpu)
+    make -s depend -j$(sysctl -n hw.ncpu)
     CXXFLAGS="${ARCH_FLAGS}" CFLAGS="${ARCH_FLAGS}" LDFLAGS="${ARCH_FLAGS}" \
-        make -j$(sysctl -n hw.ncpu) online2 lm rnnlm
+        make -s -j$(sysctl -n hw.ncpu) online2 lm rnnlm
 }
 
 # ------------------------------------------------------------------------------
@@ -229,7 +229,7 @@ build_macos_shared() {
     # Vosk API 动态库打包
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
-    KALDI_ROOT="${KALDI_ROOT}" EXT=dylib make -j$(sysctl -n hw.ncpu) \
+    KALDI_ROOT="${KALDI_ROOT}" EXT=dylib make -s -j$(sysctl -n hw.ncpu) \
         OPENFST_ROOT="${KALDI_ROOT}/tools/openfst-1.8.0" \
         HAVE_ACCELERATE=1 \
         HAVE_OPENBLAS_CLAPACK=0 \
@@ -262,7 +262,7 @@ build_macos_static() {
     # Vosk API 静态目标文件编译与归档打包
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
-    make -j$(sysctl -n hw.ncpu) \
+    make -s -j$(sysctl -n hw.ncpu) \
         recognizer.o language_model.o model.o spk_model.o vosk_api.o postprocessor.o \
         KALDI_ROOT="${KALDI_ROOT}" \
         OPENFST_ROOT="${KALDI_ROOT}/tools/openfst-1.8.0" \
@@ -309,7 +309,7 @@ build_ios_static() {
     # Vosk API iOS 打包
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
-    make -j$(sysctl -n hw.ncpu) \
+    make -s -j$(sysctl -n hw.ncpu) \
         recognizer.o language_model.o model.o spk_model.o vosk_api.o postprocessor.o \
         KALDI_ROOT="${KALDI_ROOT}" \
         OPENFST_ROOT="${KALDI_ROOT}/tools/openfst-1.8.0" \
@@ -356,7 +356,7 @@ build_tvos_static() {
     # Vosk API tvOS 打包
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
-    make -j$(sysctl -n hw.ncpu) \
+    make -s -j$(sysctl -n hw.ncpu) \
         recognizer.o language_model.o model.o spk_model.o vosk_api.o postprocessor.o \
         KALDI_ROOT="${KALDI_ROOT}" \
         OPENFST_ROOT="${KALDI_ROOT}/tools/openfst-1.8.0" \
@@ -522,7 +522,7 @@ build_watchos_static() {
 
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
-    make -j$(sysctl -n hw.ncpu) \
+    make -s -j$(sysctl -n hw.ncpu) \
         recognizer.o language_model.o model.o spk_model.o vosk_api.o postprocessor.o \
         KALDI_ROOT="${KALDI_ROOT}" \
         OPENFST_ROOT="${KALDI_ROOT}/tools/openfst-1.8.0" \
@@ -617,7 +617,7 @@ build_visionos_static() {
 
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
-    make -j$(sysctl -n hw.ncpu) \
+    make -s -j$(sysctl -n hw.ncpu) \
         recognizer.o language_model.o model.o spk_model.o vosk_api.o postprocessor.o \
         KALDI_ROOT="${KALDI_ROOT}" \
         OPENFST_ROOT="${KALDI_ROOT}/tools/openfst-1.8.0" \

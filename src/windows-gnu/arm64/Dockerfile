@@ -49,15 +49,15 @@ RUN mkdir -p /opt/kaldi \
         ./configure --prefix=/opt/kaldi/local \
         --enable-shared --enable-static --with-pic --disable-bin \
         --enable-lookahead-fsts --enable-ngram-fsts --host=aarch64-w64-mingw32 \
-    && make -j $(nproc) \
-    && make install
+    && make -s -j $(nproc) \
+    && make -s install
 
 # 3. 编译 Windows ARM64 OpenBLAS 核心数学库
 RUN cd /opt/kaldi \
     && git clone -b v0.3.20 --single-branch --depth=1 https://github.com/xianyi/OpenBLAS \
     && cd OpenBLAS \
-    && make HOSTCC=gcc CC=aarch64-w64-mingw32-gcc ONLY_CBLAS=1 USE_LOCKING=1 USE_THREAD=0 USE_OPENMP=0 DYNAMIC_ARCH=0 TARGET=ARMV8 ARCH=arm64 BINARY=64 -j $(nproc) \
-    && make PREFIX=/opt/kaldi/local install
+    && make -s HOSTCC=gcc CC=aarch64-w64-mingw32-gcc ONLY_CBLAS=1 USE_LOCKING=1 USE_THREAD=0 USE_OPENMP=0 DYNAMIC_ARCH=0 TARGET=ARMV8 ARCH=arm64 BINARY=64 -j $(nproc) \
+    && make -s PREFIX=/opt/kaldi/local install
 
 # 4. 编译 Windows ARM64 CLAPACK (线性代数与 Fortran 桥接)
 RUN cd /opt/kaldi \
@@ -65,9 +65,9 @@ RUN cd /opt/kaldi \
     && mkdir clapack/BUILD \
     && cd clapack/BUILD \
     && cmake -DCMAKE_C_COMPILER_TARGET=aarch64-w64-mingw32 -DCMAKE_C_COMPILER=aarch64-w64-mingw32-gcc -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_CROSSCOMPILING=True .. \
-    && make -C F2CLIBS/libf2c \
-    && make -C BLAS \
-    && make -C SRC \
+    && make -s -C F2CLIBS/libf2c \
+    && make -s -C BLAS \
+    && make -s -C SRC \
     && find . -name "*.a" -exec cp {} /opt/kaldi/local/lib \;
 
 # 5. 编译 Windows ARM64 Kaldi 核心引擎
@@ -78,8 +78,8 @@ RUN cd /opt/kaldi \
         --mathlib=OPENBLAS_CLAPACK \
         --host=aarch64-w64-mingw32 --openblas-clapack-root=/opt/kaldi/local \
         --fst-root=/opt/kaldi/local --fst-version=1.8.0 \
-    && make depend -j \
-    && make LLVM_BUILD=1 -j $(nproc) online2 rnnlm
+    && make -s depend -j \
+    && make -s LLVM_BUILD=1 -j $(nproc) online2 rnnlm
 
 # 6. 编译 Vosk API 并打包 Windows ARM64 全套目标产物
 ARG VOSK_TAG=v0.3.50
@@ -91,7 +91,7 @@ RUN cd /opt \
        fi \
     && cd vosk-api/src \
     && CXX=aarch64-w64-mingw32-g++ CC=aarch64-w64-mingw32-gcc AR=aarch64-w64-mingw32-ar \
-        KALDI_ROOT=/opt/kaldi/kaldi OPENBLAS_ROOT=/opt/kaldi/local OPENFST_ROOT=/opt/kaldi/local EXT=dll make -j $(nproc) \
+        KALDI_ROOT=/opt/kaldi/kaldi OPENBLAS_ROOT=/opt/kaldi/local OPENFST_ROOT=/opt/kaldi/local EXT=dll make -s -j $(nproc) \
             HAVE_ACCELERATE=0 \
             HAVE_OPENBLAS_CLAPACK=1 \
             HAVE_MKL=0 \

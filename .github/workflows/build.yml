@@ -200,21 +200,41 @@ jobs:
           $testSrc = "tests\test_vosk_e2e.c"
           $incDir = "src\windows-msvc\deps\vosk-api\src"
           $libDir = "dist\windows-msvc\x86_64"
-          $modelDir = "tests\model"
+          $asrDir = "tests\asr"
+          $spkDir = "tests\spk"
           $wavFile = "tests\test.wav"
           
           if (-not (Test-Path $wavFile)) {
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/alphacep/vosk-api/master/python/example/test.wav" -OutFile $wavFile -UseBasicParsing
           }
-          if (-not (Test-Path "$modelDir\am\final.mdl")) {
-            if (Test-Path "tests\model.zip") {
-              Expand-Archive -Path "tests\model.zip" -DestinationPath "tests" -Force
-            } else {
-              Invoke-WebRequest -Uri "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip" -OutFile "tests\model.zip" -UseBasicParsing
-              Expand-Archive -Path "tests\model.zip" -DestinationPath "tests\model_tmp" -Force
-              Move-Item "tests\model_tmp\vosk-model-small-en-us-0.15" $modelDir -Force
-              Remove-Item "tests\model_tmp" -Recurse -Force
+          if (-not (Test-Path "$asrDir\am\final.mdl")) {
+            if (-not (Test-Path "tests\asr.zip")) {
+              Invoke-WebRequest -Uri "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip" -OutFile "tests\asr.zip" -UseBasicParsing
             }
+            Expand-Archive -Path "tests\asr.zip" -DestinationPath "tests\tmp_asr" -Force
+            $innerAsr = (Get-ChildItem -Path "tests\tmp_asr" -Recurse -Filter "final.mdl" | Select-Object -First 1).Directory.Parent.FullName
+            if ($innerAsr -and (Test-Path $innerAsr)) {
+              Move-Item $innerAsr $asrDir -Force
+            } else {
+              $firstDir = (Get-ChildItem -Path "tests\tmp_asr" -Directory | Select-Object -First 1).FullName
+              Move-Item $firstDir $asrDir -Force
+            }
+            Remove-Item "tests\tmp_asr" -Recurse -Force
+          }
+
+          if (-not (Test-Path "$spkDir\final.ext.raw")) {
+            if (-not (Test-Path "tests\spk.zip")) {
+              Invoke-WebRequest -Uri "https://alphacephei.com/vosk/models/vosk-model-spk-0.4.zip" -OutFile "tests\spk.zip" -UseBasicParsing
+            }
+            Expand-Archive -Path "tests\spk.zip" -DestinationPath "tests\tmp_spk" -Force
+            $innerSpk = (Get-ChildItem -Path "tests\tmp_spk" -Recurse -Filter "final.ext.raw" | Select-Object -First 1).Directory.FullName
+            if ($innerSpk -and (Test-Path $innerSpk)) {
+              Move-Item $innerSpk $spkDir -Force
+            } else {
+              $firstDir = (Get-ChildItem -Path "tests\tmp_spk" -Directory | Select-Object -First 1).FullName
+              Move-Item $firstDir $spkDir -Force
+            }
+            Remove-Item "tests\tmp_spk" -Recurse -Force
           }
           
           # --- [1/2] Dynamic Library (libvosk.dll) E2E Test ---
@@ -226,7 +246,7 @@ jobs:
           }
           Copy-Item "$libDir\*.dll" "tests\" -Force -ErrorAction SilentlyContinue
           $testExe = (Resolve-Path "tests\test_e2e_dll.exe").Path
-          & $testExe (Resolve-Path $modelDir) (Resolve-Path $wavFile)
+          & $testExe (Resolve-Path $asrDir) (Resolve-Path $wavFile) (Resolve-Path $spkDir)
           if ($LASTEXITCODE -ne 0) {
             Write-Error "DLL test execution failed with exit code $LASTEXITCODE"
             exit 1
@@ -243,7 +263,7 @@ jobs:
               exit 1
             }
             $staticExe = (Resolve-Path "tests\test_e2e_static.exe").Path
-            & $staticExe (Resolve-Path $modelDir) (Resolve-Path $wavFile)
+            & $staticExe (Resolve-Path $asrDir) (Resolve-Path $wavFile) (Resolve-Path $spkDir)
             if ($LASTEXITCODE -ne 0) {
               Write-Error "Static lib test execution failed with exit code $LASTEXITCODE"
               exit 1

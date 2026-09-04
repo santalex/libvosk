@@ -8,7 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 LIB_DIR="${1:-}"
-MODEL_DIR="${SCRIPT_DIR}/model"
+ASR_DIR="${SCRIPT_DIR}/asr"
+SPK_DIR="${SCRIPT_DIR}/spk"
 WAV_FILE="${SCRIPT_DIR}/test.wav"
 
 if [ -z "${LIB_DIR}" ]; then
@@ -29,23 +30,47 @@ if [ ! -f "${WAV_FILE}" ]; then
     curl -fsSL "https://raw.githubusercontent.com/alphacep/vosk-api/master/python/example/test.wav" -o "${WAV_FILE}"
 fi
 
-# 2. 自动解压测试模型 (优先使用本地自带的 model.zip)
-if [ ! -d "${MODEL_DIR}" ] || [ ! -f "${MODEL_DIR}/am/final.mdl" ]; then
-    if [ -f "${SCRIPT_DIR}/model.zip" ]; then
-        echo "--> 正在从本地自带 assets 解压测试模型 (model.zip)..."
-        unzip -q -o "${SCRIPT_DIR}/model.zip" -d "${SCRIPT_DIR}"
-    else
-        echo "--> 本地未找到 model.zip，正在下载官方测试模型 (vosk-model-small-en-us-0.15, ~40MB)..."
-        mkdir -p "${SCRIPT_DIR}/model_tmp"
-        curl -fsSL "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip" -o "${SCRIPT_DIR}/model_download.zip"
-        unzip -q -o "${SCRIPT_DIR}/model_download.zip" -d "${SCRIPT_DIR}/model_tmp"
-        rm -rf "${MODEL_DIR}"
-        mv "${SCRIPT_DIR}/model_tmp/vosk-model-small-en-us-0.15" "${MODEL_DIR}"
-        rm -rf "${SCRIPT_DIR}/model_tmp" "${SCRIPT_DIR}/model_download.zip"
+# 2. 自动准备 ASR 测试模型 (优先本地 tests/asr，其次 tests/asr.zip，否则从官方下载)
+if [ ! -d "${ASR_DIR}" ] || [ ! -f "${ASR_DIR}/am/final.mdl" ]; then
+    if [ ! -f "${SCRIPT_DIR}/asr.zip" ]; then
+        echo "--> 正在下载 ASR 测试模型 (vosk-model-small-en-us-0.15, ~40MB)..."
+        curl -fsSL "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip" -o "${SCRIPT_DIR}/asr.zip"
     fi
+    echo "--> 正在解压 ASR 模型并规范化目录结构..."
+    mkdir -p "${SCRIPT_DIR}/tmp_asr"
+    unzip -q -o "${SCRIPT_DIR}/asr.zip" -d "${SCRIPT_DIR}/tmp_asr"
+    rm -rf "${ASR_DIR}"
+    INNER_ASR=$(find "${SCRIPT_DIR}/tmp_asr" -maxdepth 2 -type f -name "final.mdl" -exec dirname {} \; | sed 's#/am$##' | head -n 1)
+    if [ -n "${INNER_ASR}" ] && [ -d "${INNER_ASR}" ]; then
+        mv "${INNER_ASR}" "${ASR_DIR}"
+    else
+        FIRST_DIR=$(find "${SCRIPT_DIR}/tmp_asr" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+        mv "${FIRST_DIR}" "${ASR_DIR}"
+    fi
+    rm -rf "${SCRIPT_DIR}/tmp_asr"
 fi
 
-# 3. 确定头文件与库文件
+# 3. 自动准备 Speaker 说话人模型 (优先本地 tests/spk，其次 tests/spk.zip，否则从官方下载)
+if [ ! -d "${SPK_DIR}" ] || [ ! -f "${SPK_DIR}/final.ext.raw" ]; then
+    if [ ! -f "${SCRIPT_DIR}/spk.zip" ]; then
+        echo "--> 正在下载 Speaker 声纹模型 (vosk-model-spk-0.4, ~13MB)..."
+        curl -fsSL "https://alphacephei.com/vosk/models/vosk-model-spk-0.4.zip" -o "${SCRIPT_DIR}/spk.zip"
+    fi
+    echo "--> 正在解压 Speaker 声纹模型并规范化目录结构..."
+    mkdir -p "${SCRIPT_DIR}/tmp_spk"
+    unzip -q -o "${SCRIPT_DIR}/spk.zip" -d "${SCRIPT_DIR}/tmp_spk"
+    rm -rf "${SPK_DIR}"
+    INNER_SPK=$(find "${SCRIPT_DIR}/tmp_spk" -maxdepth 2 -type f -name "final.ext.raw" -exec dirname {} \; | head -n 1)
+    if [ -n "${INNER_SPK}" ] && [ -d "${INNER_SPK}" ]; then
+        mv "${INNER_SPK}" "${SPK_DIR}"
+    else
+        FIRST_DIR=$(find "${SCRIPT_DIR}/tmp_spk" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+        mv "${FIRST_DIR}" "${SPK_DIR}"
+    fi
+    rm -rf "${SCRIPT_DIR}/tmp_spk"
+fi
+
+# 4. 确定头文件与动态库路径
 HEADER_FILE="${LIB_DIR}/vosk_api.h"
 if [ ! -f "${HEADER_FILE}" ]; then
     HEADER_FILE="${ROOT_DIR}/src/apple/vosk-api/src/vosk_api.h"
@@ -72,7 +97,7 @@ if [ -f "${LIB_DIR}/libvosk.dylib" ]; then
     TEST_BIN="${SCRIPT_DIR}/test_e2e_shared"
     "${CC}" -O2 -I"$(dirname "${HEADER_FILE}")" "${SCRIPT_DIR}/test_vosk_e2e.c" \
         -L"${LIB_DIR}" -lvosk -Wl,-rpath,"${LIB_DIR}" -o "${TEST_BIN}"
-    "${TEST_BIN}" "${MODEL_DIR}" "${WAV_FILE}"
+    "${TEST_BIN}" "${ASR_DIR}" "${WAV_FILE}" "${SPK_DIR}"
     rm -f "${TEST_BIN}"
     TESTED_COUNT=$((TESTED_COUNT + 1))
 elif [ -f "${LIB_DIR}/libvosk.so" ]; then
@@ -80,7 +105,7 @@ elif [ -f "${LIB_DIR}/libvosk.so" ]; then
     TEST_BIN="${SCRIPT_DIR}/test_e2e_shared"
     "${CC}" -O2 -I"$(dirname "${HEADER_FILE}")" "${SCRIPT_DIR}/test_vosk_e2e.c" \
         -L"${LIB_DIR}" -lvosk -lpthread -lm -ldl -Wl,-rpath,"${LIB_DIR}" -o "${TEST_BIN}"
-    "${TEST_BIN}" "${MODEL_DIR}" "${WAV_FILE}"
+    "${TEST_BIN}" "${ASR_DIR}" "${WAV_FILE}" "${SPK_DIR}"
     rm -f "${TEST_BIN}"
     TESTED_COUNT=$((TESTED_COUNT + 1))
 elif [ -f "${LIB_DIR}/libvosk.dll" ]; then
@@ -89,7 +114,7 @@ elif [ -f "${LIB_DIR}/libvosk.dll" ]; then
         TEST_BIN="${SCRIPT_DIR}/test_e2e_shared.exe"
         x86_64-w64-mingw32-gcc -O2 -I"$(dirname "${HEADER_FILE}")" "${SCRIPT_DIR}/test_vosk_e2e.c" \
             -L"${LIB_DIR}" -lvosk -o "${TEST_BIN}"
-        WINEDEBUG=-all wine "${TEST_BIN}" "${MODEL_DIR}" "${WAV_FILE}"
+        WINEDEBUG=-all wine "${TEST_BIN}" "${ASR_DIR}" "${WAV_FILE}" "${SPK_DIR}"
         rm -f "${TEST_BIN}"
         TESTED_COUNT=$((TESTED_COUNT + 1))
     fi
@@ -107,7 +132,7 @@ if [ -f "${LIB_DIR}/libvosk.a" ]; then
         g++ -O2 -I"$(dirname "${HEADER_FILE}")" "${SCRIPT_DIR}/test_vosk_e2e.c" \
             "${LIB_DIR}/libvosk.a" -lpthread -lm -ldl -lgfortran -o "${TEST_BIN}"
     fi
-    "${TEST_BIN}" "${MODEL_DIR}" "${WAV_FILE}"
+    "${TEST_BIN}" "${ASR_DIR}" "${WAV_FILE}" "${SPK_DIR}"
     rm -f "${TEST_BIN}"
     TESTED_COUNT=$((TESTED_COUNT + 1))
 fi

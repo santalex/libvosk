@@ -12,9 +12,11 @@ src/apple/build/
 
 # Test Cache & Artifacts
 tests/model/
+tests/asr/
+tests/spk/
 tests/test_e2e_*
+tests/*.zip
 !tests/test.wav
-!tests/model.zip
 tools/__pycache__
 
 # OS / Editor Junk Files

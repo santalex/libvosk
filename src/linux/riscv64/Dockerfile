@@ -37,15 +37,15 @@ RUN mkdir -p /opt/kaldi \
     CFLAGS="-O3 -DNDEBUG -g0 -ffunction-sections -fdata-sections -fPIC" CXXFLAGS="-O3 -DNDEBUG -g0 -ffunction-sections -fdata-sections -fPIC" ./configure --prefix=/opt/kaldi/local \
     --enable-shared --enable-static --with-pic --disable-bin \
     --enable-lookahead-fsts --enable-ngram-fsts --host=riscv64-linux-gnu \
-    && make -j $(nproc) \
-    && make install
+    && make -s -j $(nproc) \
+    && make -s install
 
 # 2. 编译 Linux RISC-V 64 OpenBLAS 核心数学库
 RUN cd /opt/kaldi \
     && git clone -b v0.3.20 --single-branch --depth=1 https://github.com/xianyi/OpenBLAS \
     && cd OpenBLAS \
-    && make HOSTCC=gcc CC=riscv64-linux-gnu-gcc TARGET=RISCV64_GENERIC DYNAMIC_ARCH=0 ONLY_CBLAS=1 USE_LOCKING=1 USE_THREAD=0 NO_FORTRAN=1 NO_SHARED=1 CFLAGS="-O3 -DNDEBUG -g0 -fPIC" -j $(nproc) \
-    && make PREFIX=/opt/kaldi/local NO_SHARED=1 install \
+    && make -s HOSTCC=gcc CC=riscv64-linux-gnu-gcc TARGET=RISCV64_GENERIC DYNAMIC_ARCH=0 ONLY_CBLAS=1 USE_LOCKING=1 USE_THREAD=0 NO_FORTRAN=1 NO_SHARED=1 CFLAGS="-O3 -DNDEBUG -g0 -fPIC" -j $(nproc) \
+    && make -s PREFIX=/opt/kaldi/local NO_SHARED=1 install \
     && cd /opt/kaldi/local/lib \
     && ln -sf libopenblas.a libopenblas.so 2>/dev/null || true \
     && ln -sf libopenblas.a liblapack.a 2>/dev/null || true \
@@ -65,8 +65,8 @@ RUN cd /opt/kaldi \
         --mathlib=OPENBLAS --openblas-root=/opt/kaldi/local \
         --fst-root=/opt/kaldi/local --fst-version=1.8.0 \
     && if [ -f kaldi.mk ]; then sed -i 's/-msse -msse2//g' kaldi.mk && sed -i 's/-g //g' kaldi.mk && sed -i 's/-O1/-O3 -DNDEBUG -g0 -ffunction-sections -fdata-sections/g' kaldi.mk; fi \
-    && make depend -j \
-    && make -j $(nproc) online2 rnnlm
+    && make -s depend -j \
+    && make -s -j $(nproc) online2 rnnlm
 
 # 4. 编译 Vosk API 并打包 Linux RISC-V 64 目标产物 (libvosk.so, libvosk.a, vosk_api.h)
 ARG VOSK_TAG=v0.3.50
@@ -78,7 +78,7 @@ RUN cd /opt \
     fi \
     && cd vosk-api/src \
     && CXX=riscv64-linux-gnu-g++ CC=riscv64-linux-gnu-gcc AR=riscv64-linux-gnu-ar \
-    KALDI_ROOT=/opt/kaldi/kaldi OPENBLAS_ROOT=/opt/kaldi/local OPENFST_ROOT=/opt/kaldi/local EXT=so make -j $(nproc) \
+    KALDI_ROOT=/opt/kaldi/kaldi OPENBLAS_ROOT=/opt/kaldi/local OPENFST_ROOT=/opt/kaldi/local EXT=so make -s -j $(nproc) \
     HAVE_ACCELERATE=0 \
     HAVE_OPENBLAS=1 \
     HAVE_MKL=0 \
