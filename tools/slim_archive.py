@@ -326,20 +326,6 @@ def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_to
             
         kept_obj_paths = [str(p) for p in kept_objs]
         if is_windows_lib:
-            # Check for llvm-strip to prune unneeded local symbols from MSVC COFF objects
-            strip_tool = shutil.which("llvm-strip")
-            if not strip_tool and os.path.exists(r"C:\Program Files\LLVM\bin\llvm-strip.exe"):
-                strip_tool = r"C:\Program Files\LLVM\bin\llvm-strip.exe"
-            if strip_tool:
-                print(f"    检测到 {strip_tool}，正在对保留目标文件执行符号精简...")
-                try:
-                    for i in range(0, len(kept_obj_paths), 100):
-                        batch = kept_obj_paths[i:i + 100]
-                        subprocess.run([strip_tool, "--strip-unneeded"] + batch,
-                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-                except Exception:
-                    pass
-
             rsp_path = temp_dir / "lib_pack.rsp"
             with open(rsp_path, "w", encoding="utf-8") as rf:
                 rf.write(f"/NOLOGO\n/OUT:{output_path}\n")
