@@ -3,8 +3,12 @@
 # ==============================================================================
 FROM debian:11
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+RUN apt-get update -o Acquire::Retries=3 && \
+    DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install -y \
+        -o Acquire::Retries=3 \
+        -o Acquire::http::Timeout="30" \
+        -o Acquire::https::Timeout="30" \
+        --no-install-recommends \
         ca-certificates \
         g++ \
         bzip2 \
