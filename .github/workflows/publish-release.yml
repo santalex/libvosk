@@ -1,0 +1,63 @@
+name: Publish Release from Build Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'GitHub Actions Run ID to publish from (e.g. 33858530997)'
+        required: true
+        type: string
+      tag_name:
+        description: 'Release Tag Name (e.g. v0.3.50)'
+        required: true
+        default: 'v0.3.50'
+      release_title:
+        description: 'Release Title (optional, leave blank for default title)'
+        required: false
+        default: ''
+      is_draft:
+        description: 'Publish as Draft'
+        required: true
+        type: boolean
+        default: false
+      is_prerelease:
+        description: 'Mark as Pre-release'
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  publish-release:
+    name: Publish Release from Artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Download Build Packages from Run ID
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RUN_ID="${{ inputs.run_id }}"
+          echo "--> Fetching 'libvosk-packages' artifact from Run ID: ${RUN_ID} ..."
+          mkdir -p packages
+          gh run download "${RUN_ID}" -n libvosk-packages --dir packages
+          
+          echo "✔ Artifact download completed! Verifying packages directory:"
+          if [ ! -d packages ] || [ -z "$(ls -A packages)" ]; then
+            echo "❌ Error: 'packages' directory is missing or empty!"
+            exit 1
+          fi
+          ls -lh packages
+
+      - name: Publish or Update GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.tag_name }}
+          name: ${{ inputs.release_title || format('LibVosk Multi-Platform Distribution {0}', inputs.tag_name) }}
+          files: packages/*
+          draft: ${{ inputs.is_draft }}
+          prerelease: ${{ inputs.is_prerelease }}
