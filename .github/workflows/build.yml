@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       target_os:
-        description: 'Target OS (windows-msvc, windows-gnu, macos, linux, android, ios, tvos, watchos, visionos, all)'
+        description: 'Target OS (windows-msvc, windows-gnu, macos, linux, android, ios, tvos, visionos, all)'
         required: true
         type: choice
         options:
@@ -16,7 +16,6 @@ on:
           - 'android'
           - 'ios'
           - 'tvos'
-          - 'watchos'
           - 'visionos'
         default: 'all'
       target_arch:
@@ -68,14 +67,10 @@ jobs:
           - os: tvos
             arch: universal
             runner: macos-14
-          # watchOS (暂时禁用 - 构建尚不稳定)
-          # - os: watchos
-          #   arch: universal
-          #   runner: macos-14
-          # visionOS (暂时禁用 - 构建尚不稳定)
-          # - os: visionos
-          #   arch: universal
-          #   runner: macos-14
+          # visionOS
+          - os: visionos
+            arch: universal
+            runner: macos-14
           # Windows (MSVC Native)
           - os: windows-msvc
             arch: x86_64
@@ -144,7 +139,7 @@ jobs:
           ((github.event_name == 'push') ||
            ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
             (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch || (matrix.arch == 'universal' && (inputs.target_arch == 'arm64' || inputs.target_arch == 'x86_64')))))
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: step-security/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.arch == 'x86' && 'x86' || (matrix.arch == 'arm64' && 'arm64' || 'x64') }}
 
@@ -166,11 +161,11 @@ jobs:
             (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch || (matrix.arch == 'universal' && (inputs.target_arch == 'arm64' || inputs.target_arch == 'x86_64')))))
         run: |
           if [ "${{ matrix.os }}" = "macos" ]; then
-            echo "--> [1/3] 测试 macOS arm64 原生二进制..."
+            echo "--> [1/3] Testing macOS arm64 native binary..."
             ./tests/run_tests.sh dist/macos/arm64
-            echo "--> [2/3] 测试 macOS x86_64 (Rosetta 2) 二进制..."
+            echo "--> [2/3] Testing macOS x86_64 (Rosetta 2) binary..."
             arch -x86_64 ./tests/run_tests.sh dist/macos/x86_64
-            echo "--> [3/3] 测试 macOS Universal 胖二进制..."
+            echo "--> [3/3] Testing macOS Universal fat binary..."
             ./tests/run_tests.sh dist/macos/universal
           elif [ "${{ matrix.os }}" = "linux" ] && [ "${{ matrix.arch }}" = "x86_64" ]; then
             ./tests/run_tests.sh dist/linux/x86_64

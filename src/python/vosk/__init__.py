@@ -40,7 +40,7 @@ _cffi_ffi.cdef("""
 def _load_library():
     package_dir = os.path.dirname(__file__)
     
-    # 1. 优先尝试包目录下的直出文件
+    # 1. First attempt: check direct files in package directory
     possible_names = ["libvosk.dylib", "libvosk.so", "libvosk.dll"]
     for name in possible_names:
         lib_path = os.path.join(package_dir, name)
@@ -50,7 +50,7 @@ def _load_library():
             except Exception:
                 pass
 
-    # 2. 尝试从多平台 Universal 架构目录搜索 (lib/<os>_<arch>/...)
+    # 2. Second attempt: search in multi-platform directory (lib/<os>_<arch>/...)
     system = platform.system().lower()
     machine = platform.machine().lower()
     
@@ -69,7 +69,7 @@ def _load_library():
     elif machine in ["i386", "i686", "x86"]:
         arch_tag = "x86"
 
-    # 在 lib 目录下查找符合前缀的动态库
+    # Search matching dynamic library in lib directory
     lib_dir = os.path.join(package_dir, "lib")
     if os.path.exists(lib_dir):
         for root, _, files in os.walk(lib_dir):
@@ -82,7 +82,7 @@ def _load_library():
                         except Exception:
                             pass
 
-    # 3. 兜底：尝试系统动态库搜索路径
+    # 3. Fallback: search system dynamic library paths
     for name in possible_names:
         try:
             return _cffi_ffi.dlopen(name)

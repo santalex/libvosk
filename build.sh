@@ -2,17 +2,17 @@
 set -e
 
 # ==============================================================================
-# build.sh - Vosk API 全平台 (64位 & 32位) 交叉架构工业级 Docker & Native 编译主控引擎
+# build.sh - Vosk API Multi-Platform (64-Bit & 32-Bit) Build & Packaging Engine
 #
-# 支持参数 (GNU 命名风格):
-#   --os <macos|ios|tvos|watchos|visionos|apple|windows-msvc|windows-gnu|windows|linux|android|all> (默认: all)
-#   --arch <x86_64|aarch64|arm64|arm64-v8a|riscv64|armv7l|x86|universal|all> (默认: all)
-#   --link-type <all|static|shared>           (默认: all)
-#   --vosk-tag <v0.3.50|v0.3.45|master|...>   (默认: v0.3.50)
-#   -p, --package                             编译完成后自动重组打包 Zip 与 Python Wheels
-#   --only-package                            跳过编译，直接对现有的 dist/ 目录进行全量打包
-#   -y, --yes                                 非交互模式自动确认全量编译
-#   -h, --help                                显示帮助指南
+# Supported options (GNU style):
+#   --os <macos|ios|tvos|visionos|apple|windows-msvc|windows-gnu|linux|android|all> (default: all)
+#   --arch <x86_64|aarch64|arm64|arm64-v8a|riscv64|armv7l|x86|universal|all> (default: all)
+#   --link-type <all|static|shared>           (default: all)
+#   --vosk-tag <v0.3.50|v0.3.45|master|...>   (default: v0.3.50)
+#   -p, --package                             Package Zip archives & Python Wheels after build
+#   --only-package                            Skip build, package existing dist/ artifacts
+#   -y, --yes                                 Auto-confirm full build in non-interactive mode
+#   -h, --help                                Show this help message
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,26 +29,27 @@ HAS_EXPLICIT_FLAGS=false
 
 show_help() {
     echo "=============================================================================="
-    echo "  Vosk API 全平台 64位/全架构 构建引擎 (libvosk build.sh)"
+    echo "  Vosk API Multi-Platform Build Engine (libvosk build.sh)"
     echo "=============================================================================="
-    echo "用法:"
-    echo "  ./build.sh [选项]"
+    echo "Usage:"
+    echo "  ./build.sh [options]"
     echo ""
-    echo "选项说明:"
-    echo "  --os <系统>         指定目标系统 (macos|ios|tvos|watchos|visionos|apple|windows-msvc|windows-gnu|windows|linux|android|all, 默认: all)"
-    echo "  --arch <架构>       指定目标架构 (x86_64|aarch64|arm64|arm64-v8a|riscv64|armv7l|x86|universal|all, 默认: all)"
-    echo "  --link-type <形式>  指定打包产物形式 (all|static|shared, 默认: all)"
-    echo "  --vosk-tag <版本>   指定 Vosk API Git Tag 版本 (默认: v0.3.50)"
-    echo "  -p, --package       编译完成后自动打包产物 (生成 Zip 压缩包与 Python Wheels 到 packages/)"
-    echo "  --only-package      跳过编译阶段，直接提取现有的 dist/ 目录打包输出至 packages/"
-    echo "  -y, --yes           自动跳过全量打包二次确认"
-    echo "  -h, --help          显示帮助说明"
+    echo "Options:"
+    echo "  --os <system>       Target OS (macos|ios|tvos|visionos|apple|windows-msvc|windows-gnu|linux|android|all, default: all)"
+    echo "  --arch <arch>       Target architecture (x86_64|aarch64|arm64|arm64-v8a|riscv64|armv7l|x86|universal|all, default: all)"
+    echo "  --link-type <type>  Artifact linkage type (all|static|shared, default: all)"
+    echo "  --vosk-tag <tag>    Vosk API Git Tag version (default: v0.3.50)"
+    echo "  -p, --package       Package artifacts into Zip & Python Wheels in packages/"
+    echo "  --only-package      Skip build phase, extract and package existing dist/ to packages/"
+    echo "  -y, --yes           Auto-confirm full multi-platform build without interactive prompt"
+    echo "  -h, --help          Show this help message"
     echo ""
-    echo "使用示例:"
-    echo "  ./build.sh --only-package                       # 直接提取当前 dist/ 打包输出至 packages/"
-    echo "  ./build.sh --os windows-gnu --arch x86_64 -p    # 编译 Windows GNU (MinGW) 并自动打包"
-    echo "  ./build.sh --os android --arch arm64-v8a -p      # 编译 Android 并自动打包"
-    echo "  ./build.sh --os macos --arch universal -p        # 编译 macOS Universal 并打包"
+    echo "Examples:"
+    echo "  ./build.sh --only-package                       # Package current dist/ artifacts"
+    echo "  ./build.sh --os windows-gnu --arch x86_64 -p    # Build Windows MinGW x86_64 & package"
+    echo "  ./build.sh --os android --arch arm64-v8a -p      # Build Android arm64-v8a & package"
+    echo "  ./build.sh --os macos --arch universal -p        # Build macOS Universal & package"
+    echo "  ./build.sh --os visionos -p                     # Build visionOS & package"
     echo "=============================================================================="
 }
 
@@ -92,7 +93,7 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         *)
-            echo "❌ 未知参数: $1"
+            echo "[ERROR] Unknown parameter: $1"
             show_help
             exit 1
             ;;
@@ -105,14 +106,14 @@ package_all() {
     mkdir -p "${PKG_DIR}"
 
     echo "=============================================================================="
-    echo "  [打包引擎] 正在从 ${DIST_DIR} 提取产物打包至 ${PKG_DIR} ..."
+    echo "  [Packaging Engine] Packaging artifacts from ${DIST_DIR} to ${PKG_DIR} ..."
     echo "=============================================================================="
 
-    # 1. 通用平台 ZIP 组装 (Windows / Linux / Android)
+    # 1. Generic Platform ZIP Assembly (Windows / Linux / Android)
     find "${DIST_DIR}" -mindepth 2 -maxdepth 2 -type d | while read -r dir; do
         rel_path="${dir#"${DIST_DIR}"/}"
         
-        # 避免处理 Apple 系列、特殊目录及 XCFramework 目录
+        # Skip Apple, special folders, and XCFramework directories
         if [[ "$rel_path" == *".xcframework"* ]] || [[ "$rel_path" == *"apple"* ]] || [[ "$rel_path" == *"headers"* ]] || [[ "$rel_path" == *"python"* ]]; then
             continue
         fi
@@ -120,59 +121,65 @@ package_all() {
         os_name=$(echo "$rel_path" | cut -d'/' -f1)
         arch_name=$(echo "$rel_path" | cut -d'/' -f2)
 
-        # Apple 相关操作系统统一在 Apple 专用段以规范化方式打包
-        if [ "$os_name" = "macos" ] || [ "$os_name" = "ios" ] || [ "$os_name" = "tvos" ] || [ "$os_name" = "watchos" ] || [ "$os_name" = "visionos" ]; then
+        # Apple OS targets are packaged in the Apple dedicated section
+        if [ "$os_name" = "macos" ] || [ "$os_name" = "ios" ] || [ "$os_name" = "tvos" ] || [ "$os_name" = "visionos" ]; then
             continue
         fi
         
         if [ -n "$os_name" ] && [ -n "$arch_name" ]; then
-            if [ "$os_name" = "windows" ]; then
-                pkg_prefix="libvosk-${VOSK_TAG}-windows-msvc-${arch_name}"
-            else
-                pkg_prefix="libvosk-${VOSK_TAG}-${os_name}-${arch_name}"
-            fi
+            pkg_prefix="libvosk-${VOSK_TAG}-${os_name}-${arch_name}"
             echo "Packaging Zip [${os_name}-${arch_name}] -> ${pkg_prefix} ..."
 
-            # A. Shared 动态库包 (.so / .dll / .dylib / libvosk.lib + header)
+            # A. Shared Library Package (.so / .dll / .dylib / libvosk.lib + header)
             mkdir -p tmp_shared
             find "$dir" -maxdepth 3 \( -name "*.so" -o -name "*.dll" -o -name "*.dylib" -o -name "libvosk.lib" \) -exec cp -f {} tmp_shared/ \; 2>/dev/null || true
             if [ -n "$(find tmp_shared -type f \( -name "*.so" -o -name "*.dll" -o -name "*.dylib" -o -name "libvosk.lib" \) 2>/dev/null)" ]; then
                 find "$dir" -maxdepth 3 -name "vosk_api.h" -exec cp -f {} tmp_shared/ \; 2>/dev/null || true
-                find "${DIST_DIR}" -name "vosk_api.h" -exec cp -f {} tmp_shared/ \; 2>/dev/null || true
+                if [ ! -f tmp_shared/vosk_api.h ]; then
+                    find "${DIST_DIR}" -maxdepth 3 -name "vosk_api.h" -exec cp -f {} tmp_shared/ \; 2>/dev/null || true
+                fi
                 (cd tmp_shared && zip -r -q "${PKG_DIR}/${pkg_prefix}-shared.zip" .)
             fi
             rm -rf tmp_shared
 
-            # B. Static 纯静态库包 (.a / libvosk_static.lib + header)
+            # B. Static Library Package (.a / .lib + header)
             mkdir -p tmp_static
-            find "$dir" -maxdepth 3 \( -name "*.a" -o -name "libvosk_static.lib" \) -exec cp -f {} tmp_static/ \; 2>/dev/null || true
-            rm -f tmp_static/*.dll.a
-            if [ -n "$(find tmp_static -type f \( -name "*.a" -o -name "libvosk_static.lib" \) 2>/dev/null)" ]; then
+            find "$dir" -maxdepth 3 \( -name "*.a" -o -name "vosk.lib" \) -not -name "libvosk.lib" -exec cp -f {} tmp_static/ \; 2>/dev/null || true
+            if [ -n "$(find tmp_static -type f \( -name "*.a" -o -name "vosk.lib" \) 2>/dev/null)" ]; then
                 find "$dir" -maxdepth 3 -name "vosk_api.h" -exec cp -f {} tmp_static/ \; 2>/dev/null || true
-                find "${DIST_DIR}" -name "vosk_api.h" -exec cp -f {} tmp_static/ \; 2>/dev/null || true
+                if [ ! -f tmp_static/vosk_api.h ]; then
+                    find "${DIST_DIR}" -maxdepth 3 -name "vosk_api.h" -exec cp -f {} tmp_static/ \; 2>/dev/null || true
+                fi
                 (cd tmp_static && zip -r -q "${PKG_DIR}/${pkg_prefix}-static.zip" .)
             fi
             rm -rf tmp_static
         fi
     done
 
-    # 2. Apple 平台 (macOS / iOS / tvOS / macOS XCFramework)
-    if [ -d "${DIST_DIR}/macos" ] || [ -d "${DIST_DIR}/ios" ] || [ -d "${DIST_DIR}/tvos" ]; then
-        echo "Packaging Apple (macOS / iOS / tvOS / XCFramework) Zip packages..."
-        mac_arm64_dylib=$(find "${DIST_DIR}/macos/arm64" -name "*.dylib" 2>/dev/null | head -n 1)
-        mac_x86_dylib=$(find "${DIST_DIR}/macos/x86_64" -name "*.dylib" 2>/dev/null | head -n 1)
-        mac_arm64_a=$(find "${DIST_DIR}/macos/arm64" -name "*.a" 2>/dev/null | head -n 1)
-        mac_x86_a=$(find "${DIST_DIR}/macos/x86_64" -name "*.a" 2>/dev/null | head -n 1)
-        mac_header=$(find "${DIST_DIR}" -name "vosk_api.h" 2>/dev/null | head -n 1)
+    # 2. Apple Ecosystem Native Packaging (macOS / iOS / tvOS / visionOS)
+    local mac_header=$(find "${DIST_DIR}" -name "vosk_api.h" 2>/dev/null | head -n 1)
+    if [ -z "$mac_header" ] && [ -f "${SCRIPT_DIR}/src/apple/vosk-api/src/vosk_api.h" ]; then
+        mac_header="${SCRIPT_DIR}/src/apple/vosk-api/src/vosk_api.h"
+    fi
 
-        # 单架构 macOS
+    if [ -d "${DIST_DIR}/macos" ] || [ -d "${DIST_DIR}/ios" ] || [ -d "${DIST_DIR}/tvos" ] || [ -d "${DIST_DIR}/visionos" ]; then
+        # macOS Single Arch Packages
+        mac_arm64_dylib=""
+        mac_x86_dylib=""
+        mac_arm64_a=""
+        mac_x86_a=""
+
         for mac_arch in arm64 x86_64; do
             mac_dir="${DIST_DIR}/macos/${mac_arch}"
             if [ -d "$mac_dir" ]; then
                 pkg_prefix="libvosk-${VOSK_TAG}-macos-${mac_arch}"
+                echo "Packaging macOS Zip [${mac_arch}] -> ${pkg_prefix} ..."
+
                 mkdir -p tmp_mac_shared
                 find "$mac_dir" -name "*.dylib" -exec cp -f {} tmp_mac_shared/ \; 2>/dev/null || true
                 if [ -n "$(find tmp_mac_shared -type f -name "*.dylib" 2>/dev/null)" ]; then
+                    if [ "$mac_arch" = "arm64" ]; then mac_arm64_dylib="$(find tmp_mac_shared -name "*.dylib")"; fi
+                    if [ "$mac_arch" = "x86_64" ]; then mac_x86_dylib="$(find tmp_mac_shared -name "*.dylib")"; fi
                     if [ -n "$mac_header" ]; then cp "$mac_header" tmp_mac_shared/; fi
                     (cd tmp_mac_shared && zip -r -q "${PKG_DIR}/${pkg_prefix}-shared.zip" .)
                 fi
@@ -181,6 +188,8 @@ package_all() {
                 mkdir -p tmp_mac_static
                 find "$mac_dir" -name "*.a" -exec cp -f {} tmp_mac_static/ \; 2>/dev/null || true
                 if [ -n "$(find tmp_mac_static -type f -name "*.a" 2>/dev/null)" ]; then
+                    if [ "$mac_arch" = "arm64" ]; then mac_arm64_a="$(find tmp_mac_static -name "*.a")"; fi
+                    if [ "$mac_arch" = "x86_64" ]; then mac_x86_a="$(find tmp_mac_static -name "*.a")"; fi
                     if [ -n "$mac_header" ]; then cp "$mac_header" tmp_mac_static/; fi
                     (cd tmp_mac_static && zip -r -q "${PKG_DIR}/${pkg_prefix}-static.zip" .)
                 fi
@@ -216,8 +225,8 @@ package_all() {
             rm -rf tmp_mac_uni
         fi
 
-        # iOS / tvOS 平台静态包与 XCFramework 包
-        for apple_os in ios tvos; do
+        # iOS / tvOS / visionOS Static Packages and XCFramework Packages
+        for apple_os in ios tvos visionos; do
             apple_dir="${DIST_DIR}/${apple_os}"
             if [ -d "$apple_dir" ]; then
                 mkdir -p tmp_apple_static
@@ -239,7 +248,7 @@ package_all() {
             fi
         done
 
-        # 3. Apple 全平台 (macOS + iOS + tvOS) Super XCFramework 大一统包
+        # 3. Apple Multi-Platform Super XCFramework (macOS + iOS + tvOS + visionOS)
         if [ "$(uname)" = "Darwin" ] && [ -n "$mac_header" ]; then
             mkdir -p tmp_apple_super
             mkdir -p tmp_headers && cp "$mac_header" tmp_headers/
@@ -250,6 +259,8 @@ package_all() {
             ios_sim_a=$(find "${DIST_DIR}/ios" -path "*/iphonesimulator_universal/libvosk.a" 2>/dev/null | head -n 1)
             tvos_arm64_a=$(find "${DIST_DIR}/tvos" -path "*/appletvos_arm64/libvosk.a" 2>/dev/null | head -n 1)
             tvos_sim_a=$(find "${DIST_DIR}/tvos" -path "*/appletvsimulator_universal/libvosk.a" 2>/dev/null | head -n 1)
+            visionos_xros_a=$(find "${DIST_DIR}/visionos" -path "*/xros_arm64/libvosk.a" 2>/dev/null | head -n 1)
+            visionos_sim_a=$(find "${DIST_DIR}/visionos" -path "*/xrsimulator_arm64/libvosk.a" 2>/dev/null | head -n 1)
 
             XCF_CMD=(xcodebuild -create-xcframework)
             apple_targets_count=0
@@ -258,9 +269,11 @@ package_all() {
             if [ -n "$ios_sim_a" ]; then XCF_CMD+=(-library "$ios_sim_a" -headers tmp_headers); apple_targets_count=$((apple_targets_count + 1)); fi
             if [ -n "$tvos_arm64_a" ]; then XCF_CMD+=(-library "$tvos_arm64_a" -headers tmp_headers); apple_targets_count=$((apple_targets_count + 1)); fi
             if [ -n "$tvos_sim_a" ]; then XCF_CMD+=(-library "$tvos_sim_a" -headers tmp_headers); apple_targets_count=$((apple_targets_count + 1)); fi
+            if [ -n "$visionos_xros_a" ]; then XCF_CMD+=(-library "$visionos_xros_a" -headers tmp_headers); apple_targets_count=$((apple_targets_count + 1)); fi
+            if [ -n "$visionos_sim_a" ]; then XCF_CMD+=(-library "$visionos_sim_a" -headers tmp_headers); apple_targets_count=$((apple_targets_count + 1)); fi
             XCF_CMD+=(-output tmp_apple_super/libvosk.xcframework)
 
-            # 仅在集齐至少 2 个及以上跨系统/跨平台目标切片时才组装 Apple 全平台 Super XCFramework
+            # Assemble Super XCFramework when at least 2 cross-platform slices exist
             if [ "$apple_targets_count" -ge 2 ]; then
                 "${XCF_CMD[@]}" 2>/dev/null || true
                 rm -rf tmp_headers
@@ -276,28 +289,24 @@ package_all() {
         fi
     fi
 
-    # 4. Python Wheel 组装 (3 级梯度包)
+    # 4. Python Wheel Assembly (3 Tiers)
     if command -v python3 >/dev/null 2>&1; then
         echo "Packaging Python Wheels ..."
         python3 -m pip install setuptools wheel cffi >/dev/null 2>&1 || true
 
-        # A. 单目标 Wheel
+        # A. Single-target Wheel
         for dylib_path in $(find "${DIST_DIR}" \( -name "libvosk.dylib" -o -name "libvosk.so" -o -name "libvosk.dll" \) -not -path "*.xcframework/*" 2>/dev/null); do
             target_name=$(basename $(dirname "$dylib_path"))
             os_name=$(basename $(dirname $(dirname "$dylib_path")))
             if [ -n "$target_name" ] && [ -n "$os_name" ] && [ "$os_name" != "." ] && [ "$os_name" != "dist" ] && [ "$target_name" != "universal" ]; then
-                if [ "$os_name" = "windows" ]; then
-                    plat_tag="windows_msvc_${target_name}"
-                else
-                    plat_tag="${os_name}_${target_name}"
-                fi
+                plat_tag="${os_name}_${target_name}"
                 clean_plat="${plat_tag//-/_}"
                 echo "Packaging Python Wheel [${clean_plat}] -> libvosk-${VOSK_TAG//v/}-py3-none-${clean_plat}.whl ..."
                 rm -rf tmp_py_build && mkdir -p tmp_py_build/vosk
                 cp -R src/python/vosk/* tmp_py_build/vosk/
                 cp src/python/setup.py tmp_py_build/
                 cp "$dylib_path" tmp_py_build/vosk/
-                if [ "$os_name" = "windows" ]; then
+                if [[ "$os_name" == *"windows"* ]]; then
                     find "$(dirname "$dylib_path")" -maxdepth 1 -name "*.dll" -exec cp -f {} tmp_py_build/vosk/ \; 2>/dev/null || true
                 fi
                 (cd tmp_py_build && VOSK_TAG="${VOSK_TAG}" python3 setup.py bdist_wheel --plat-name="${clean_plat}" >/dev/null 2>&1) || true
@@ -306,7 +315,7 @@ package_all() {
             fi
         done
 
-        # B. OS Universal Wheel (要求该系统下至少聚合 2 个及以上子架构)
+        # B. OS Universal Wheel
         for os_sys in macos windows linux android; do
             plat_out="${os_sys}_universal"
             if [ "$os_sys" = "macos" ]; then plat_out="macosx_universal"; fi
@@ -321,7 +330,7 @@ package_all() {
                     arch_sub=$(basename $(dirname "$dylib_path"))
                     mkdir -p "tmp_os_build/vosk/lib/${os_sys}_${arch_sub}"
                     cp -f "$dylib_path" "tmp_os_build/vosk/lib/${os_sys}_${arch_sub}/"
-                    if [ "$os_sys" = "windows" ]; then
+                    if [[ "$os_sys" == *"windows"* ]]; then
                         find "$(dirname "$dylib_path")" -maxdepth 1 -name "*.dll" -exec cp -f {} "tmp_os_build/vosk/lib/${os_sys}_${arch_sub}/" \; 2>/dev/null || true
                     fi
                     found_count=$((found_count + 1))
@@ -335,7 +344,7 @@ package_all() {
             rm -rf tmp_os_build
         done
 
-        # C. Super Any Universal Wheel (要求至少聚合 2 个及以上跨平台动态库)
+        # C. Super Any Universal Wheel
         found_any_count=0
         rm -rf tmp_all_build && mkdir -p tmp_all_build/vosk/lib
         cp -R src/python/vosk/* tmp_all_build/vosk/
@@ -345,7 +354,7 @@ package_all() {
             os_sub=$(basename $(dirname $(dirname "$dylib_path")))
             mkdir -p "tmp_all_build/vosk/lib/${os_sub}_${target_sub}"
             cp -f "$dylib_path" "tmp_all_build/vosk/lib/${os_sub}_${target_sub}/"
-            if [ "$os_sub" = "windows" ]; then
+            if [[ "$os_sub" == *"windows"* ]]; then
                 find "$(dirname "$dylib_path")" -maxdepth 1 -name "*.dll" -exec cp -f {} "tmp_all_build/vosk/lib/${os_sub}_${target_sub}/" \; 2>/dev/null || true
             fi
             found_any_count=$((found_any_count + 1))
@@ -358,48 +367,46 @@ package_all() {
         rm -rf tmp_all_build
     fi
 
-    # 5. 生成 SHA256SUMS.txt
+    # 5. Generate SHA256SUMS.txt
     (cd "${PKG_DIR}" && shasum -a 256 * > SHA256SUMS.txt 2>/dev/null || true)
 
-    # 6. 调用 tools/verify_packages.py 全量审计校验
+    # 6. Verify Packages via tools/verify_packages.py
     if command -v python3 >/dev/null 2>&1 && [ -f "${SCRIPT_DIR}/tools/verify_packages.py" ]; then
         python3 "${SCRIPT_DIR}/tools/verify_packages.py" "${PKG_DIR}"
     fi
 
     echo "=============================================================================="
-    echo "✔ 🎉 产物打包全量完成！输出目录: ${PKG_DIR}"
+    echo "[OK] Artifact packaging complete! Output directory: ${PKG_DIR}"
     echo "=============================================================================="
     ls -lh "${PKG_DIR}"
 }
 
-# 如果仅仅是单独打包模式 (--only-package)，执行完毕直接退出
 if [ "${ONLY_PACKAGE}" = true ]; then
     package_all
     exit 0
 fi
 
-# 如果用户未传递任何显式架构/系统标志，且处于交互式终端 (TTY)，弹出防手滑二次确认
+# Interactive confirmation prompt when no explicit target is passed
 if [ "${HAS_EXPLICIT_FLAGS}" = false ] && [ "${AUTO_YES}" = false ] && [ -t 0 ]; then
     echo "=============================================================================="
-    echo "  ⚠️ 警告: 您未指定任何平台选项，默认即将启动【全平台全架构】全量编译！"
-    echo "  ⏱️ 注意: 全量编译包含 11 个跨架构产物，在单机完整构建预计需要 1 ~ 2+ 小时！"
-    echo "  👉 提示: 您随时可以输入 -h / --help 查看帮助，仅编译特定系统或架构。"
-    echo "           (示例: ./build.sh --os windows --arch x86_64)"
+    echo "  [WARNING] No platform specified. This will build ALL platforms & architectures."
+    echo "  [INFO] Full build produces 11 cross-arch targets and may take 1-2+ hours."
+    echo "  [HINT] Use -h / --help to build specific targets (e.g., ./build.sh --os macos)."
     echo "=============================================================================="
-    read -p "确认要继续启动全量全平台编译吗？[y/N]: " -n 1 -r
+    read -p "Continue with full multi-platform build? [y/N]: " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "💡 操作已取消。请输入 ./build.sh --help 查看特定系统/架构的编译用法。"
+        echo "Operation cancelled. See ./build.sh --help for specific target usage."
         exit 0
     fi
 fi
 
 echo "=============================================================================="
-echo "  Vosk API 主打包引擎启动"
-echo "  目标系统 (OS)   : ${TARGET_OS}"
-echo "  目标架构 (ARCH) : ${TARGET_ARCH}"
-echo "  链接形式 (LINK) : ${LINK_TYPE}"
-echo "  Vosk Tag 版本   : ${VOSK_TAG}"
+echo "  Vosk API Master Build Engine"
+echo "  Target OS   : ${TARGET_OS}"
+echo "  Target Arch : ${TARGET_ARCH}"
+echo "  Link Type   : ${LINK_TYPE}"
+echo "  Vosk Tag    : ${VOSK_TAG}"
 echo "=============================================================================="
 
 build_target_docker() {
@@ -410,29 +417,28 @@ build_target_docker() {
     local OUT_DIR="${SCRIPT_DIR}/dist/${OS}/${ARCH}"
 
     if [ ! -f "${DOCKERFILE}" ]; then
-        echo "⚠️ 跳过: 未找到对应 Dockerfile (${DOCKERFILE})"
+        echo "[INFO] Skipping: Dockerfile not found (${DOCKERFILE})"
         return 0
     fi
 
     echo "=============================================================================="
-    echo "  [Docker 沙盒] 正在编译 ${OS} [${ARCH}] ..."
+    echo "  [Docker Sandbox] Building ${OS} [${ARCH}] ..."
     echo "=============================================================================="
     mkdir -p "${OUT_DIR}"
 
-    local IMAGE_TAG="reavox-vosk-${OS}-${ARCH}:latest"
-    local CONTAINER_NAME="temp-reavox-${OS}-${ARCH}-$(date +%s)"
+    local IMAGE_TAG="libvosk-${OS}-${ARCH}:latest"
+    local CONTAINER_NAME="temp-libvosk-${OS}-${ARCH}-$(date +%s)"
 
     docker build --build-arg VOSK_TAG="${VOSK_TAG}" -t "${IMAGE_TAG}" -f "${DOCKERFILE}" "${SCRIPT_DIR}"
 
-    echo "--> 正在抽取产物 [${OS} - ${ARCH}] ..."
+    echo "--> Extracting artifacts [${OS} - ${ARCH}] ..."
     docker create --name "${CONTAINER_NAME}" "${IMAGE_TAG}"
     docker cp "${CONTAINER_NAME}:/opt/dist/${OS}/${ARCH}/." "${OUT_DIR}/" 2>/dev/null || \
-    docker cp "${CONTAINER_NAME}:/opt/dist/windows/aarch64/." "${OUT_DIR}/" 2>/dev/null || \
     docker cp "${CONTAINER_NAME}:/opt/dist/${ARCH}/${ARCH}/." "${OUT_DIR}/" 2>/dev/null || true
 
     docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
 
-    echo "✔ 🎉 ${OS} [${ARCH}] 构建并解包导出成功: ${OUT_DIR}"
+    echo "[OK] Built and extracted ${OS} [${ARCH}]: ${OUT_DIR}"
     ls -lh "${OUT_DIR}"
 }
 
@@ -440,7 +446,7 @@ build_apple_native() {
     local PLATFORM=$1
     local ARCH=$2
     echo "=============================================================================="
-    echo "  [Native 编译] 正在调用 Apple 构建流 (${PLATFORM} - ${ARCH}) ..."
+    echo "  [Native Build] Invoking Apple build flow (${PLATFORM} - ${ARCH}) ..."
     echo "=============================================================================="
     local ARCH_ARG="${ARCH}"
     if [ "${ARCH}" = "all" ]; then
@@ -449,23 +455,22 @@ build_apple_native() {
     VOSK_TAG="${VOSK_TAG}" bash "${SCRIPT_DIR}/src/apple/build.sh" "${PLATFORM}" "${ARCH_ARG}"
 
     local ROOT_DIST_DST="${SCRIPT_DIR}/dist"
-    # 清理可能残留的历史临时目录
     rm -rf "${SCRIPT_DIR}/src/apple/dist" "${ROOT_DIST_DST}/apple"
 
     if [ -d "${ROOT_DIST_DST}/${PLATFORM}/${ARCH_ARG}" ]; then
-        echo "✔ 🎉 Apple [${PLATFORM} - ${ARCH_ARG}] 产物导出成功: ${ROOT_DIST_DST}/${PLATFORM}/${ARCH_ARG}"
+        echo "[OK] Apple [${PLATFORM} - ${ARCH_ARG}] artifacts exported: ${ROOT_DIST_DST}/${PLATFORM}/${ARCH_ARG}"
         ls -lh "${ROOT_DIST_DST}/${PLATFORM}/${ARCH_ARG}"
     elif [ -d "${ROOT_DIST_DST}/${PLATFORM}" ]; then
-        echo "✔ 🎉 Apple [${PLATFORM}] 产物导出成功: ${ROOT_DIST_DST}/${PLATFORM}"
+        echo "[OK] Apple [${PLATFORM}] artifacts exported: ${ROOT_DIST_DST}/${PLATFORM}"
         ls -lh "${ROOT_DIST_DST}/${PLATFORM}"
     elif [ -d "${ROOT_DIST_DST}" ]; then
-        echo "✔ 🎉 Apple 产物导出成功: ${ROOT_DIST_DST}"
+        echo "[OK] Apple artifacts exported: ${ROOT_DIST_DST}"
         ls -lh "${ROOT_DIST_DST}"
     fi
 }
 
-# 1. Apple 目标处理 (macos / ios / tvos / watchos / visionos / apple)
-if [ "${TARGET_OS}" = "macos" ] || [ "${TARGET_OS}" = "ios" ] || [ "${TARGET_OS}" = "tvos" ] || [ "${TARGET_OS}" = "watchos" ] || [ "${TARGET_OS}" = "visionos" ] || [ "${TARGET_OS}" = "apple" ] || [ "${TARGET_OS}" = "all" ]; then
+# 1. Apple Target Handling (macos / ios / tvos / visionos / apple)
+if [ "${TARGET_OS}" = "macos" ] || [ "${TARGET_OS}" = "ios" ] || [ "${TARGET_OS}" = "tvos" ] || [ "${TARGET_OS}" = "visionos" ] || [ "${TARGET_OS}" = "apple" ] || [ "${TARGET_OS}" = "all" ]; then
     if [ "$(uname)" = "Darwin" ]; then
         if [ "${TARGET_OS}" = "macos" ]; then
             build_apple_native "macos" "${TARGET_ARCH}"
@@ -473,33 +478,31 @@ if [ "${TARGET_OS}" = "macos" ] || [ "${TARGET_OS}" = "ios" ] || [ "${TARGET_OS}
             build_apple_native "ios" "${TARGET_ARCH}"
         elif [ "${TARGET_OS}" = "tvos" ]; then
             build_apple_native "tvos" "${TARGET_ARCH}"
-        elif [ "${TARGET_OS}" = "watchos" ]; then
-            build_apple_native "watchos" "${TARGET_ARCH}"
         elif [ "${TARGET_OS}" = "visionos" ]; then
             build_apple_native "visionos" "${TARGET_ARCH}"
         else
             build_apple_native "all" "${TARGET_ARCH}"
         fi
     else
-        echo "⚠️ 注意: 编译 Apple (macOS/iOS/tvOS/watchOS/visionOS) 必须在 macOS 宿主机环境运行，非 macOS 自动跳过。"
+        echo "[INFO] Note: Apple targets (macOS/iOS/tvOS/visionOS) require a macOS host environment. Skipping on non-macOS."
     fi
 fi
 
-# 2. Windows-GNU 目标处理 (Docker / MinGW-w64 跨平台交叉编译)
+# 2. Windows-GNU Target Handling (Docker / MinGW-w64 Cross-Compilation)
 if [ "${TARGET_OS}" = "windows-gnu" ] || [ "${TARGET_OS}" = "all" ]; then
     if [ "${TARGET_ARCH}" = "x86_64" ] || [ "${TARGET_ARCH}" = "all" ]; then build_target_docker "windows-gnu" "x86_64"; fi
     if [ "${TARGET_ARCH}" = "arm64" ] || [ "${TARGET_ARCH}" = "aarch64" ] || [ "${TARGET_ARCH}" = "all" ]; then build_target_docker "windows-gnu" "arm64"; fi
     if [ "${TARGET_ARCH}" = "x86" ] || [ "${TARGET_ARCH}" = "i686" ] || [ "${TARGET_ARCH}" = "all" ]; then build_target_docker "windows-gnu" "x86"; fi
 fi
 
-# 3. Windows-MSVC 目标处理 (原生 MSVC / PowerShell 构建)
-if [ "${TARGET_OS}" = "windows-msvc" ] || [ "${TARGET_OS}" = "windows" ] || [ "${TARGET_OS}" = "all" ]; then
+# 3. Windows-MSVC Target Handling (Native MSVC / PowerShell Build)
+if [ "${TARGET_OS}" = "windows-msvc" ] || [ "${TARGET_OS}" = "all" ]; then
     if [ "$(uname)" = "Darwin" ] || [ "$(expr substr $(uname -s) 1 5)" = "Linux" ]; then
-        echo "💡 提示: Windows-MSVC 目标使用原生 MSVC 纯净编译架构 (在 Windows 宿主上运行 .\\src\\windows-msvc\\build.ps1)。"
+        echo "[INFO] Note: Windows-MSVC targets require native MSVC (run .\\src\\windows-msvc\\build.ps1 on Windows)."
     fi
 fi
 
-# 3. Linux 目标处理
+# 4. Linux Target Handling
 if [ "${TARGET_OS}" = "linux" ] || [ "${TARGET_OS}" = "all" ]; then
     if [ "${TARGET_ARCH}" = "x86_64" ] || [ "${TARGET_ARCH}" = "all" ]; then build_target_docker "linux" "x86_64"; fi
     if [ "${TARGET_ARCH}" = "aarch64" ] || [ "${TARGET_ARCH}" = "arm64" ] || [ "${TARGET_ARCH}" = "all" ]; then build_target_docker "linux" "aarch64"; fi
@@ -508,22 +511,22 @@ if [ "${TARGET_OS}" = "linux" ] || [ "${TARGET_OS}" = "all" ]; then
     if [ "${TARGET_ARCH}" = "x86" ] || [ "${TARGET_ARCH}" = "all" ]; then build_target_docker "linux" "x86"; fi
 fi
 
-# 4. Android 目标处理
+# 5. Android Target Handling
 if [ "${TARGET_OS}" = "android" ] || [ "${TARGET_OS}" = "all" ]; then
     if [ "${TARGET_ARCH}" = "arm64-v8a" ] || [ "${TARGET_ARCH}" = "aarch64" ] || [ "${TARGET_ARCH}" = "all" ]; then build_target_docker "android" "arm64-v8a"; fi
     if [ "${TARGET_ARCH}" = "x86_64" ] || [ "${TARGET_ARCH}" = "all" ]; then build_target_docker "android" "x86_64"; fi
 fi
 
-# 5. 如果开启了 --package 标志，触发打包
+# 6. Package if --package was specified
 if [ "${DO_PACKAGE}" = true ]; then
     package_all
 fi
 
 echo "=============================================================================="
 if [ "${TARGET_OS}" = "all" ] && [ "${TARGET_ARCH}" = "all" ]; then
-    echo "✔ 🎉 全平台全架构 Vosk API 编译构建任务全部完成！"
+    echo "[OK] Full multi-platform Vosk API build tasks complete!"
 else
-    echo "✔ 🎉 Vosk API [系统: ${TARGET_OS}, 架构: ${TARGET_ARCH}] 编译构建任务完成！"
+    echo "[OK] Vosk API [OS: ${TARGET_OS}, Arch: ${TARGET_ARCH}] build task complete!"
 fi
-echo "产物目录: ${SCRIPT_DIR}/dist"
+echo "Artifacts directory: ${SCRIPT_DIR}/dist"
 echo "=============================================================================="

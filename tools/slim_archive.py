@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
 ==============================================================================
-LibVosk 静态库极速无损瘦身引擎 (Transitive Symbol Reachability Slimmer)
+LibVosk Static Library Slimming Engine (Transitive Symbol Reachability Slimmer)
 ==============================================================================
-原理说明：
-  传统 Kaldi 与 OpenFST 打包静态库时，会将上百个离线工具、训练算法、诊断日志模块
-  全部打包进 libvosk.a，导致静态库体积高达 360MB+。
+Overview:
+  When Kaldi and OpenFST are bundled into a static archive, hundreds of offline
+  binaries, training algorithms, and diagnostic modules get included, swelling
+  libvosk.a to over 360MB.
   
-  本工具基于 vosk_api.h 中的公开 C API 根符号，通过图论传递闭包（Transitive Closure）
-  精确计算实际运行时被调用的 .o/.obj 目标文件集合，剔除所有孤岛无引用模块，并在保留
-  OpenFST 静态构造函数注册器的前提下，重构生成极小化 (~25MB) 的零损耗静态库。
+  This tool analyzes root public C API symbols from vosk_api.h and computes
+  the transitive closure of required object files (.o / .obj). It eliminates
+  unreferenced modules while preserving OpenFST static initializers and factory
+  registrations, yielding a compact (~20MB) zero-loss static library.
 ==============================================================================
 """
 
@@ -18,16 +20,6 @@ import sys
 import shutil
 import tempfile
 import subprocess
-
-# Windows 控制台默认 cp1252 编码无法输出中文字符，强制切换为 UTF-8
-# 避免 UnicodeEncodeError 导致 slim_archive 提前崩溃
-if sys.platform == "win32":
-    import io
-    if hasattr(sys.stdout, "buffer"):
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    if hasattr(sys.stderr, "buffer"):
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-
 import argparse
 import time
 from pathlib import Path
@@ -40,15 +32,7 @@ def _record_symbol(bucket, sym_name):
 
 
 def _classify_nm_symbol(sym_type, has_value):
-    """GNU/POSIX nm 类型字母 → defined / undefined。
-
-    必须覆盖 C++ ABI 常见情况，否则传递闭包会漏掉仍被引用的 .o：
-      V/v  vtable / typeinfo（weak object）
-      R/r  .rodata 常量（如 fst::internal::kSelectInByte）
-      W/w  weak 函数
-      u    GNU unique（定义，不是未定义）
-    无地址的 v/w 视为弱未定义引用。
-    """
+    """Classify GNU/POSIX nm symbol character -> defined / undefined."""
     if not sym_type:
         return None
     kind = sym_type[0]
@@ -62,12 +46,11 @@ def _classify_nm_symbol(sym_type, has_value):
 
 
 def parse_symbols_nm(obj_path, nm_tool="nm"):
-    """使用 nm 解析 .o 文件的导出符号 (Defined) 与未解析引用 (Undefined)"""
+    """Parse defined and undefined symbols from .o file using nm."""
     defined = set()
     undefined = set()
 
     try:
-        # -g: 全局符号; -P: POSIX "name type [value [size]]"; -p: 不排序
         res = subprocess.run(
             [nm_tool, "-g", "-P", "-p", str(obj_path)],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -80,8 +63,6 @@ def parse_symbols_nm(obj_path, nm_tool="nm"):
             if len(parts) < 2:
                 continue
 
-            # POSIX: name type [value [size]]
-            # 个别 nm 仍输出 BSD: [value] type name
             if len(parts[1]) == 1 and parts[1].isalpha():
                 sym_name, sym_type = parts[0], parts[1]
                 has_value = len(parts) >= 3
@@ -104,7 +85,7 @@ def parse_symbols_nm(obj_path, nm_tool="nm"):
 
 
 def parse_symbols_msvc(obj_path):
-    """针对 Windows MSVC .obj 文件的 dumpbin 符号解析器"""
+    """Parse symbols from Windows MSVC .obj file using dumpbin."""
     defined = set()
     undefined = set()
     try:
@@ -130,7 +111,7 @@ def parse_symbols_msvc(obj_path):
 
 
 def extract_ar_python(archive_path, output_dir):
-    """跨平台纯 Python 兼容解包 GNU/BSD/MSVC 格式的 ar 归档"""
+    """Pure Python extractor for GNU/BSD/MSVC format ar archives."""
     try:
         with open(archive_path, "rb") as f:
             magic = f.read(8)
@@ -149,7 +130,7 @@ def extract_ar_python(archive_path, output_dir):
                 size = int(size_str)
                 data = f.read(size)
                 if size % 2 != 0:
-                    f.read(1) # 2-byte alignment padding
+                    f.read(1)  # 2-byte alignment padding
                 
                 # GNU long-name table
                 if raw_name == "//":
@@ -186,7 +167,7 @@ def extract_ar_python(archive_path, output_dir):
 
 
 def extract_header_symbols(header_path):
-    """从 vosk_api.h 自动提取所有 vosk_* 公开 API 符号"""
+    """Extract public vosk_* C API symbols from vosk_api.h."""
     root_symbols = set()
     if header_path and os.path.isfile(str(header_path)):
         try:
@@ -236,19 +217,19 @@ def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_to
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
     if not input_path.exists():
-        print(f"❌ 错误: 输入静态库不存在: {input_path}")
+        print(f"[ERROR] Input archive does not exist: {input_path}")
         sys.exit(1)
         
     orig_size_mb = input_path.stat().st_size / (1024 * 1024)
-    print(f"==============================================================================")
-    print(f"  LibVosk 静态库极速瘦身引擎")
-    print(f"  原始文件: {input_path.name} ({orig_size_mb:.2f} MB)")
-    print(f"==============================================================================")
+    print("==============================================================================")
+    print("  LibVosk Static Library Slimming Engine")
+    print(f"  Input file: {input_path.name} ({orig_size_mb:.2f} MB)")
+    print("==============================================================================")
 
     temp_dir = Path(tempfile.mkdtemp(prefix="vosk_slim_"))
     try:
-        # 1. 解压全部 .o / .obj 目标文件
-        print("--> [1/4] 正在解压原始静态库目标文件...")
+        # 1. Extract all object files
+        print("--> [1/4] Extracting object files from archive...")
         is_windows_lib = input_path.suffix.lower() == ".lib" and shutil.which("lib.exe") is not None
         
         extracted_count = extract_ar_python(input_path, temp_dir)
@@ -263,16 +244,16 @@ def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_to
             
         all_objs = list(temp_dir.glob("*.o")) + list(temp_dir.glob("*.obj"))
         if not all_objs:
-            print("❌ 错误: 未能在静态库中提取出任何目标文件 (.o/.obj)！")
+            print("[ERROR] Failed to extract any object files (.o/.obj) from archive!")
             sys.exit(1)
-        print(f"    成功提取 {len(all_objs)} 个目标文件 (.o/.obj)")
+        print(f"    Extracted {len(all_objs)} object files (.o/.obj)")
 
-        # 2. 提取公开 API 根符号与静态构造函数特征
+        # 2. Extract public API root symbols
         root_symbols = extract_header_symbols(header_path)
-        print(f"    从头文件提取到 {len(root_symbols)} 个核心 Vosk C API 根符号")
+        print(f"    Extracted {len(root_symbols)} root Vosk C API symbols from header")
 
-        # 3. 构建符号依赖图 (Symbol Inverted Index)
-        print("--> [2/4] 正在多线程解析目标文件符号表并构建依赖图...", flush=True)
+        # 3. Build symbol dependency graph
+        print("--> [2/4] Parsing symbol tables and building dependency graph...", flush=True)
         symbol_to_obj = {}
         obj_undefined = {}
         kept_objs = set()
@@ -284,7 +265,6 @@ def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_to
             else:
                 defined, undef = parse_symbols_nm(obj, nm_tool=nm_tool)
             name_lower = obj.name.lower()
-            # C++ 工厂/vtable 与 OpenFST .rodata 常量表：文件名不含 fst，不能只靠 API 根符号
             is_root = (
                 any(sym in defined for sym in root_symbols) or
                 ("fst" in name_lower) or
@@ -309,10 +289,10 @@ def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_to
                 if is_root:
                     kept_objs.add(obj)
 
-        print(f"    识别出 {len(kept_objs)} 个初始根节点与 OpenFST/数学 核心模块")
+        print(f"    Identified {len(kept_objs)} initial root nodes (API + OpenFST/Math core)")
 
-        # 4. 广度优先搜索 (BFS) 计算符号传递闭包
-        print("--> [3/4] 正在执行传递闭包图遍历 (Transitive Reachability Closure)...")
+        # 4. Transitive reachability closure (BFS)
+        print("--> [3/4] Performing transitive reachability closure analysis...")
         queue = list(kept_objs)
         while queue:
             curr_obj = queue.pop(0)
@@ -324,10 +304,10 @@ def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_to
 
         kept_count = len(kept_objs)
         pruned_count = len(all_objs) - kept_count
-        print(f"    闭包分析完毕: 保留 {kept_count} 个核心目标文件 (安全剔除 {pruned_count} 个废弃模块)")
+        print(f"    Closure complete: retained {kept_count} objects (pruned {pruned_count} unused objects)")
 
-        # 5. 重新封包瘦身静态库
-        print("--> [4/4] 正在重新打包极小化静态库...")
+        # 5. Repack slimmed archive
+        print("--> [4/4] Repacking slimmed archive...")
         if output_path.exists():
             output_path.unlink()
             
@@ -360,25 +340,25 @@ def slim_archive(input_archive, output_archive, header_path, nm_tool="nm", ar_to
         savings_pct = (1.0 - (new_size_mb / orig_size_mb)) * 100.0
         elapsed = time.time() - start_time
 
-        print(f"==============================================================================")
-        print(f"✔ 🎉 瘦身完成！耗时: {elapsed:.2f} 秒")
-        print(f"  原始体积: {orig_size_mb:.2f} MB")
-        print(f"  瘦身体积: {new_size_mb:.2f} MB (体积大幅削减 {savings_pct:.1f}%！)")
-        print(f"  输出文件: {output_path}")
-        print(f"==============================================================================")
+        print("==============================================================================")
+        print(f"[OK] Slimming complete in {elapsed:.2f}s")
+        print(f"  Original size : {orig_size_mb:.2f} MB")
+        print(f"  Slimmed size  : {new_size_mb:.2f} MB (reduced by {savings_pct:.1f}%)")
+        print(f"  Output file   : {output_path}")
+        print("==============================================================================")
 
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="LibVosk 静态库极速无损瘦身引擎")
-    parser.add_argument("input", help="输入的原始静态库文件 (.a / .lib)")
-    parser.add_argument("output", help="瘦身后输出的静态库文件")
-    parser.add_argument("--header", default="src/apple/vosk-api/src/vosk_api.h", help="vosk_api.h 头文件路径")
-    parser.add_argument("--nm", default="nm", help="nm 工具路径")
-    parser.add_argument("--ar", default="ar", help="ar 工具路径")
-    parser.add_argument("--ranlib", default=None, help="ranlib 工具路径")
+    parser = argparse.ArgumentParser(description="LibVosk Static Library Slimming Engine")
+    parser.add_argument("input", help="Input static library file (.a / .lib)")
+    parser.add_argument("output", help="Output slimmed static library file")
+    parser.add_argument("--header", default="src/apple/vosk-api/src/vosk_api.h", help="Path to vosk_api.h")
+    parser.add_argument("--nm", default="nm", help="Path to nm tool")
+    parser.add_argument("--ar", default="ar", help="Path to ar tool")
+    parser.add_argument("--ranlib", default=None, help="Path to ranlib tool")
     
     args = parser.parse_args()
     slim_archive(args.input, args.output, args.header, nm_tool=args.nm, ar_tool=args.ar, ranlib_tool=args.ranlib)

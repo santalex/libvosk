@@ -2,7 +2,7 @@ import os
 import zipfile
 import sys
 
-# 优先获取相对于脚本根目录的 packages 路径，亦可覆盖传入
+# Priority: packages directory relative to script root, or overridden via argv[1]
 script_dir = os.path.dirname(os.path.abspath(__file__))
 repo_root = os.path.dirname(script_dir)
 pkg_dir = os.path.join(repo_root, "packages")
@@ -11,7 +11,7 @@ if len(sys.argv) > 1:
     pkg_dir = os.path.abspath(sys.argv[1])
 
 if not os.path.exists(pkg_dir):
-    print(f"❌ Error: Packages directory {pkg_dir} does not exist!")
+    print(f"[ERROR] Packages directory {pkg_dir} does not exist!")
     sys.exit(1)
 
 files = sorted(os.listdir(pkg_dir))
@@ -19,7 +19,7 @@ zip_files = [f for f in files if f.endswith(".zip")]
 whl_files = [f for f in files if f.endswith(".whl")]
 
 print("=" * 80)
-print(f"  📦 VERIFYING PACKAGES IN {pkg_dir}")
+print(f"  VERIFYING PACKAGES IN {pkg_dir}")
 print(f"  Found {len(zip_files)} .zip packages and {len(whl_files)} .whl packages.")
 print("=" * 80)
 
@@ -30,7 +30,7 @@ def check_file(filename):
     global passed, failed
     filepath = os.path.join(pkg_dir, filename)
     file_size_mb = os.path.getsize(filepath) / 1024 / 1024
-    print(f"\n📄 Checking [{filename}] ({file_size_mb:.2f} MB)...")
+    print(f"\nChecking [{filename}] ({file_size_mb:.2f} MB)...")
     
     try:
         with zipfile.ZipFile(filepath, 'r') as z:
@@ -45,12 +45,12 @@ def check_file(filename):
             is_valid = True
             reasons = []
 
-            # 0. 规范命名检查：杜绝误将 xcframework 当作架构打包出的畸形包
+            # 0. Naming convention check
             if "xcframework-static" in filename or "-libvosk.xcframework" in filename:
                 is_valid = False
                 reasons.append(f"Invalid / malformed package name: {filename}")
 
-            # 1. 基础完整性检查：杜绝 0 字节损坏文件
+            # 1. Integrity check: reject 0-byte corrupted files
             for info in infolist:
                 if not info.filename.endswith("/") and info.file_size == 0:
                     is_valid = False
@@ -69,7 +69,7 @@ def check_file(filename):
                         is_valid = False
                         reasons.append("Missing header (vosk_api.h)")
                     
-                    # Windows 平台动态包专属规则：必须包含导入库
+                    # Windows shared package rule: must include import library
                     if is_windows:
                         has_implib = any(name.endswith((".lib", ".dll.a")) for name in namelist)
                         if not has_implib:
@@ -102,34 +102,30 @@ def check_file(filename):
                 if not has_init:
                     is_valid = False
                     reasons.append("Missing vosk/__init__.py")
-                # py3-none-any.whl 是纯 Python 包装器，仅在全平台最终打包时含动态库
-                # 单平台 CI run 中无动态库属正常情况，跳过此检查
+                
+                # py3-none-any.whl is a pure Python wrapper, skip dynamic library check
                 is_any_wheel = filename.endswith("-py3-none-any.whl")
                 if not has_lib and not is_any_wheel:
                     is_valid = False
                     reasons.append("Missing dynamic library in wheel")
-                
-                # Windows Python Wheel: libvosk.dll is self-contained (OpenBLAS statically embedded)
-                pass
 
             if is_valid:
-                print(f"   ✅ VERIFIED: OK!")
+                print(f"   [OK] VERIFIED: Valid")
                 passed += 1
             else:
-                print(f"   ❌ FAILED: {', '.join(reasons)}")
+                print(f"   [ERROR] FAILED: {', '.join(reasons)}")
                 failed += 1
 
     except Exception as e:
-        print(f"   ❌ CORRUPTED: {e}")
+        print(f"   [ERROR] CORRUPTED: {e}")
         failed += 1
 
 for f in zip_files + whl_files:
     check_file(f)
 
 print("\n" + "=" * 80)
-print(f"  🔍 VERIFICATION SUMMARY: {passed} PASSED, {failed} FAILED (TOTAL {passed + failed} PACKAGES)")
+print(f"  VERIFICATION SUMMARY: {passed} PASSED, {failed} FAILED (TOTAL {passed + failed} PACKAGES)")
 print("=" * 80)
 
 if failed > 0:
     sys.exit(1)
-

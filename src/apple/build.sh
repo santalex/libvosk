@@ -2,15 +2,15 @@
 set -e
 
 # ==============================================================================
-# build.sh - Vosk API macOS, iOS & tvOS (Apple 全生态) 自动编译与 XCFramework 打包引擎
-
+# build.sh - Vosk API Apple Native (macOS, iOS, tvOS, visionOS) Build Engine
 #
-# 支持功能:
-#   1. macOS (arm64 Apple Silicon & x86_64 Intel) 动态库 (.dylib) + 静态库 (.a) 编译
-#   2. lipo 命令合成 macOS Universal 胖二进制
-#   3. iOS (iphoneos 真机 arm64 & iphonesimulator 模拟器 arm64/x86_64) 静态库编译
-#   4. tvOS (appletvos 真机 arm64 & appletvsimulator 模拟器 arm64/x86_64) 静态库编译
-#   5. xcodebuild 构建通用跨平台 libvosk.xcframework
+# Supported features:
+#   1. macOS (arm64 Apple Silicon & x86_64 Intel) dynamic (.dylib) + static (.a)
+#   2. lipo synthesis for macOS Universal fat binaries
+#   3. iOS (iphoneos arm64 & iphonesimulator arm64/x86_64) static libraries
+#   4. tvOS (appletvos arm64 & appletvsimulator arm64/x86_64) static libraries
+#   5. visionOS (xros arm64 & xrsimulator arm64) static libraries
+#   6. xcodebuild assembly for cross-platform libvosk.xcframework
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,69 +22,68 @@ SPECIFIED_ARCH="$2"
 DEPLOYMENT_TARGET_MACOS="11.0"
 DEPLOYMENT_TARGET_IOS="12.0"
 DEPLOYMENT_TARGET_TVOS="12.0"
-DEPLOYMENT_TARGET_WATCHOS="6.0"
 DEPLOYMENT_TARGET_VISIONOS="1.0"
 export MACOSX_DEPLOYMENT_TARGET="${DEPLOYMENT_TARGET_MACOS}"
 export MAKEFLAGS="-s --no-print-directory"
+# Ensure Apple Xcode toolchain is prioritized to prevent external LLVM contamination
+export PATH="/usr/bin:/bin:/usr/sbin:/sbin:${PATH}"
 
 MACOS_SDK_PATH=$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)
 IPHONEOS_SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path 2>/dev/null || true)
 IPHONESIMULATOR_SDK_PATH=$(xcrun --sdk iphonesimulator --show-sdk-path 2>/dev/null || true)
 APPLETVOS_SDK_PATH=$(xcrun --sdk appletvos --show-sdk-path 2>/dev/null || true)
 APPLETVSIMULATOR_SDK_PATH=$(xcrun --sdk appletvsimulator --show-sdk-path 2>/dev/null || true)
-WATCHOS_SDK_PATH=$(xcrun --sdk watchos --show-sdk-path 2>/dev/null || true)
-WATCHSIMULATOR_SDK_PATH=$(xcrun --sdk watchsimulator --show-sdk-path 2>/dev/null || true)
 XROS_SDK_PATH=$(xcrun --sdk xros --show-sdk-path 2>/dev/null || true)
 XRSIMULATOR_SDK_PATH=$(xcrun --sdk xrsimulator --show-sdk-path 2>/dev/null || true)
 
 show_help() {
     echo "=============================================================================="
-    echo "  Vosk API Apple (macOS / iOS / tvOS) 原生/交叉编译打包引擎"
+    echo "  Vosk API Apple (macOS / iOS / tvOS / visionOS) Native Build Engine"
     echo "=============================================================================="
-    echo "用法:"
+    echo "Usage:"
     echo "  ./build.sh [platform] [arch]"
     echo ""
-    echo "支持平台 (platform):"
-    echo "  macos      - 编译 macOS 动态库 (.dylib)、静态库 (.a) 及 XCFramework"
-    echo "  ios        - 编译 iOS 真机与模拟器静态库，并打包为 libvosk.xcframework"
-    echo "  tvos       - 编译 tvOS 真机与模拟器静态库，并打包为 libvosk.xcframework"
-    echo "  all        - 编译全平台 (macOS + iOS + tvOS) 并生成超级大一统 XCFramework"
-    echo "  help | -h  - 显示本帮助信息"
+    echo "Supported platforms (platform):"
+    echo "  macos      - Build macOS dynamic (.dylib), static (.a) and XCFramework"
+    echo "  ios        - Build iOS device & simulator static libs, package XCFramework"
+    echo "  tvos       - Build tvOS device & simulator static libs, package XCFramework"
+    echo "  visionos   - Build visionOS device & simulator static libs, package XCFramework"
+    echo "  all        - Build all Apple platforms and assemble Apple Super XCFramework"
+    echo "  help | -h  - Show this help message"
     echo ""
-    echo "支持架构 (arch，仅限 macos 平台):"
-    echo "  arm64      - 针对 Apple Silicon (M1/M2/M3/M4) 架构 (macOS 11.0+)"
-    echo "  x86_64     - 针对 Intel 64 位 CPU 架构 (macOS 11.0+)"
-    echo "  universal  - 编译 x86_64 与 arm64 并合成 Universal 胖二进制"
-    echo "  (默认)     - 自动检测当前宿主 CPU 架构 (当前检测为: $(uname -m))"
+    echo "Supported architectures (arch, macOS only):"
+    echo "  arm64      - Target Apple Silicon (M1/M2/M3/M4) (macOS 11.0+)"
+    echo "  x86_64     - Target Intel 64-bit CPU (macOS 11.0+)"
+    echo "  universal  - Build both x86_64 & arm64 and lipo into Universal fat binary"
+    echo "  (default)  - Auto-detect host CPU architecture (detected: $(uname -m))"
     echo ""
-    echo "常用示例:"
-    echo "  ./build.sh macos            # 构建当前宿主架构的 macOS 动态库与静态库"
-    echo "  ./build.sh macos arm64      # 构建 ARM64 架构库文件"
-    echo "  ./build.sh macos universal  # 构建 macOS Universal 双架构胖二进制"
-    echo "  ./build.sh ios              # 构建 iOS 全套静态库与 XCFramework"
-    echo "  ./build.sh tvos             # 构建 tvOS 全套静态库与 XCFramework"
-    echo "  ./build.sh all              # 一键构建 Apple 全平台"
+    echo "Examples:"
+    echo "  ./build.sh macos            # Build macOS libraries for current host arch"
+    echo "  ./build.sh macos arm64      # Build macOS ARM64 library"
+    echo "  ./build.sh macos universal  # Build macOS Universal fat binary"
+    echo "  ./build.sh ios              # Build iOS static libraries and XCFramework"
+    echo "  ./build.sh tvos             # Build tvOS static libraries and XCFramework"
+    echo "  ./build.sh visionos         # Build visionOS static libraries and XCFramework"
+    echo "  ./build.sh all              # Build full Apple platforms and Super XCFramework"
     echo "=============================================================================="
 }
 
 # ------------------------------------------------------------------------------
-# 源码依赖准备函数 (Kaldi & Vosk API)
+# Dependency Preparation (Kaldi & Vosk API)
 # ------------------------------------------------------------------------------
 prepare_dependencies() {
     cd "${SCRIPT_DIR}"
 
-    # 确保 macOS/CI 拥有 OpenFST 编译所需的 autoconf/automake/libtool 工具链
     if ! command -v autoreconf &> /dev/null; then
-        echo "--> 检测到缺少 autoreconf，正在使用 Homebrew 自动安装 autoconf automake libtool..."
+        echo "--> autoreconf not found, installing autoconf automake libtool via Homebrew..."
         brew install autoconf automake libtool 2>/dev/null || true
     fi
 
     if [ ! -d "kaldi" ]; then
-        echo "--> 正在克隆 Vosk 官方适配版 Kaldi 源码库..."
+        echo "--> Cloning Vosk-adapted Kaldi source repository..."
         git clone -b vosk-android --single-branch --depth=1 https://github.com/alphacep/kaldi kaldi
     fi
 
-    # 允许跳过仅训练阶段需要的 Python2.7 / Subversion / Sox / gfortran 校验
     if [ -f "kaldi/tools/Makefile" ]; then
         sed -i '' 's/extras\/check_dependencies.sh/true/g' kaldi/tools/Makefile 2>/dev/null || true
     fi
@@ -93,7 +92,7 @@ prepare_dependencies() {
     fi
 
     if [ ! -d "kaldi/tools/openfst-1.8.0" ]; then
-        echo "--> 正在为 Apple 平台编译 OpenFST..."
+        echo "--> Compiling OpenFST for Apple platforms..."
         cd kaldi/tools
         git clone -q --depth=1 https://github.com/alphacep/openfst openfst-1.8.0
         make -s openfst LIBTOOLFLAGS="--silent" OPENFST_CONFIGURE="--enable-silent-rules"
@@ -101,7 +100,7 @@ prepare_dependencies() {
     fi
 
     if [ ! -d "vosk-api" ]; then
-        echo "--> 正在克隆 Vosk API 源码库..."
+        echo "--> Cloning Vosk API source repository..."
         local TAG_ARG=""
         if [ -n "$VOSK_TAG" ] && [ "$VOSK_TAG" != "master" ]; then
             TAG_ARG="-b ${VOSK_TAG}"
@@ -114,7 +113,7 @@ prepare_dependencies() {
 }
 
 # ------------------------------------------------------------------------------
-# 内部 Helper 函数: OpenFST 编译
+# Helper: OpenFST Compilation
 # ------------------------------------------------------------------------------
 compile_openfst() {
     local ARCH_FLAGS=$1
@@ -129,14 +128,19 @@ compile_openfst() {
     fi
     rm -f openfst-1.8.0/Makefile || true
 
+    local APPLE_CC=$(xcrun -f clang)
+    local APPLE_CXX=$(xcrun -f clang++)
+
     make -s -j$(sysctl -n hw.ncpu) openfst \
-        OPENFST_CONFIGURE="${HOST_FLAGS} --enable-silent-rules --enable-static --enable-shared --enable-far --enable-ngram-fsts --enable-lookahead-fsts --with-pic" \
+        OPENFST_CONFIGURE="${HOST_FLAGS} --enable-silent-rules --enable-static --disable-shared --enable-far --enable-ngram-fsts --enable-lookahead-fsts --with-pic" \
         LIBTOOLFLAGS="--silent" \
+        CC="${APPLE_CC} ${ARCH_FLAGS}" \
+        CXX="${APPLE_CXX} ${ARCH_FLAGS}" \
         CXXFLAGS="-O3 ${ARCH_FLAGS}" CFLAGS="-O3 ${ARCH_FLAGS}" LDFLAGS="${ARCH_FLAGS}"
 }
 
 # ------------------------------------------------------------------------------
-# 内部 Helper 函数: Kaldi 编译
+# Helper: Kaldi Compilation
 # ------------------------------------------------------------------------------
 compile_kaldi() {
     local ARCH_FLAGS=$1
@@ -161,7 +165,7 @@ compile_kaldi() {
 }
 
 # ------------------------------------------------------------------------------
-# 内部 Helper 函数: 静态库 libtool 归档与准备
+# Helper: Static Library Archiving and Slimming
 # ------------------------------------------------------------------------------
 archive_static_lib() {
     local OUT_DIR=$1
@@ -169,7 +173,7 @@ archive_static_lib() {
 
     mkdir -p "${OUT_DIR}"
 
-    echo "--> 正在合并归档静态库..."
+    echo "--> Archiving static library..."
     /usr/bin/libtool -static -o "${OUT_DIR}/libvosk.a" \
         *.o \
         "${KALDI_ROOT}/src/online2/kaldi-online2.a" \
@@ -193,7 +197,6 @@ archive_static_lib() {
         "${KALDI_ROOT}/tools/openfst-1.8.0/lib/libfst.a" \
         "${KALDI_ROOT}/tools/openfst-1.8.0/lib/libfstngram.a"
 
-    # 自动执行传递闭包瘦身与调试符号安全剥离 (360MB ➔ ~24MB)
     local SLIM_TOOL="${SCRIPT_DIR}/../../tools/slim_archive.py"
     if [ -f "${SLIM_TOOL}" ]; then
         python3 "${SLIM_TOOL}" "${OUT_DIR}/libvosk.a" "${OUT_DIR}/libvosk.a" --header "${SCRIPT_DIR}/vosk-api/src/vosk_api.h" 2>/dev/null || true
@@ -203,11 +206,11 @@ archive_static_lib() {
 
     cp -fv "${SCRIPT_DIR}/vosk-api/src/vosk_api.h" "${OUT_DIR}/vosk_api.h" 2>/dev/null || true
     local LIB_SIZE=$(du -sh "${OUT_DIR}/libvosk.a" | cut -f1)
-    echo "✔ 极小化静态库打包完成: ${OUT_DIR}/libvosk.a (${LIB_SIZE})"
+    echo "[OK] Static library packaged: ${OUT_DIR}/libvosk.a (${LIB_SIZE})"
 }
 
 # ------------------------------------------------------------------------------
-# 内部 Helper 函数: 准备 头文件 目录
+# Helper: Prepare Headers
 # ------------------------------------------------------------------------------
 prepare_headers() {
     local HEADERS_DIR="${DIST_DIR}/headers"
@@ -217,53 +220,54 @@ prepare_headers() {
 }
 
 # ------------------------------------------------------------------------------
-# 1. 编译 macOS 单架构动态共享库 (.dylib)
+# 1. Build macOS Dynamic Shared Library (.dylib)
 # ------------------------------------------------------------------------------
 build_macos_shared() {
     local TARGET_ARCH=$1
-    local ARCH_FLAGS="-arch ${TARGET_ARCH} -mmacosx-version-min=${DEPLOYMENT_TARGET_MACOS} -isysroot ${MACOS_SDK_PATH}"
-    local HOST_FLAGS="--host=${TARGET_ARCH}-apple-darwin"
+    local SDK_PATH="${MACOS_SDK_PATH}"
     local KALDI_ROOT="${SCRIPT_DIR}/kaldi"
 
-    echo "--> 正在编译 macOS 动态库 (.dylib) [${TARGET_ARCH}] (minOS: ${DEPLOYMENT_TARGET_MACOS})..."
+    echo "--> Building macOS dynamic library (.dylib) [${TARGET_ARCH}] (minOS: ${DEPLOYMENT_TARGET_MACOS})..."
+    local ARCH_FLAGS="-arch ${TARGET_ARCH} -isysroot ${SDK_PATH} -mmacosx-version-min=${DEPLOYMENT_TARGET_MACOS}"
+    local HOST_FLAGS="--host=${TARGET_ARCH}-apple-darwin"
 
     compile_openfst "${ARCH_FLAGS}" "${HOST_FLAGS}"
     compile_kaldi "${ARCH_FLAGS}" 1
 
-    # Vosk API 动态库打包
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
-    KALDI_ROOT="${KALDI_ROOT}" EXT=dylib make -s -j$(sysctl -n hw.ncpu) \
+    make -s -j$(sysctl -n hw.ncpu) \
+        KALDI_ROOT="${KALDI_ROOT}" \
         OPENFST_ROOT="${KALDI_ROOT}/tools/openfst-1.8.0" \
         HAVE_ACCELERATE=1 \
         HAVE_OPENBLAS_CLAPACK=0 \
         HAVE_MKL=0 \
-        USE_SHARED=0 \
+        USE_SHARED=1 \
         EXTRA_CFLAGS="${ARCH_FLAGS}" \
         EXTRA_LDFLAGS="${ARCH_FLAGS} -Wl,-install_name,@rpath/libvosk.dylib"
 
     local OUT_DIR="${DIST_DIR}/macos/${TARGET_ARCH}"
     mkdir -p "${OUT_DIR}"
     cp -fv libvosk.dylib "${OUT_DIR}/libvosk.dylib"
-    cp -fv "${SCRIPT_DIR}/vosk-api/src/vosk_api.h" "${OUT_DIR}/vosk_api.h" 2>/dev/null || true
-    echo "✔ macOS 动态库编译完成 [${TARGET_ARCH}]: ${OUT_DIR}/libvosk.dylib"
+    cp -fv vosk_api.h "${OUT_DIR}/vosk_api.h"
+    echo "[OK] macOS dynamic library built [${TARGET_ARCH}]: ${OUT_DIR}/libvosk.dylib"
 }
 
 # ------------------------------------------------------------------------------
-# 2. 编译 macOS 单架构静态归档库 (.a)
+# 2. Build macOS Static Library (.a)
 # ------------------------------------------------------------------------------
 build_macos_static() {
     local TARGET_ARCH=$1
-    local ARCH_FLAGS="-arch ${TARGET_ARCH} -mmacosx-version-min=${DEPLOYMENT_TARGET_MACOS} -isysroot ${MACOS_SDK_PATH}"
-    local HOST_FLAGS="--host=${TARGET_ARCH}-apple-darwin"
+    local SDK_PATH="${MACOS_SDK_PATH}"
     local KALDI_ROOT="${SCRIPT_DIR}/kaldi"
 
-    echo "--> 正在编译 macOS 静态库 (.a) [${TARGET_ARCH}] (minOS: ${DEPLOYMENT_TARGET_MACOS})..."
+    echo "--> Building macOS static library (.a) [${TARGET_ARCH}] (minOS: ${DEPLOYMENT_TARGET_MACOS})..."
+    local ARCH_FLAGS="-arch ${TARGET_ARCH} -isysroot ${SDK_PATH} -mmacosx-version-min=${DEPLOYMENT_TARGET_MACOS}"
+    local HOST_FLAGS="--host=${TARGET_ARCH}-apple-darwin"
 
     compile_openfst "${ARCH_FLAGS}" "${HOST_FLAGS}"
     compile_kaldi "${ARCH_FLAGS}" 0
 
-    # Vosk API 静态目标文件编译与归档打包
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
     make -s -j$(sysctl -n hw.ncpu) \
@@ -280,11 +284,11 @@ build_macos_static() {
     local OUT_DIR="${DIST_DIR}/macos/${TARGET_ARCH}"
     archive_static_lib "${OUT_DIR}"
 
-    echo "✔ macOS 静态库打包完成 [${TARGET_ARCH}]: ${OUT_DIR}/libvosk.a"
+    echo "[OK] macOS static library packaged [${TARGET_ARCH}]: ${OUT_DIR}/libvosk.a"
 }
 
 # ------------------------------------------------------------------------------
-# 3. 编译 iOS 单架构静态库
+# 3. Build iOS Static Library
 # ------------------------------------------------------------------------------
 build_ios_static() {
     local SDK=$1
@@ -292,7 +296,7 @@ build_ios_static() {
     local SDK_PATH=$3
     local KALDI_ROOT="${SCRIPT_DIR}/kaldi"
 
-    echo "--> 正在编译 iOS 静态库 [${SDK} / ${TARGET_ARCH}]..."
+    echo "--> Building iOS static library [${SDK} / ${TARGET_ARCH}]..."
 
     local SDK_FLAG=""
     local PLATFORM_NAME=""
@@ -310,7 +314,6 @@ build_ios_static() {
     compile_openfst "${ARCH_FLAGS}" "${HOST_FLAGS}"
     compile_kaldi "${ARCH_FLAGS}" 0
 
-    # Vosk API iOS 打包
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
     make -s -j$(sysctl -n hw.ncpu) \
@@ -327,11 +330,11 @@ build_ios_static() {
     local OUT_DIR="${DIST_DIR}/ios/${PLATFORM_NAME}_${TARGET_ARCH}"
     archive_static_lib "${OUT_DIR}"
 
-    echo "✔ iOS 静态库打包完成 [${PLATFORM_NAME}_${TARGET_ARCH}]: ${OUT_DIR}/libvosk.a"
+    echo "[OK] iOS static library packaged [${PLATFORM_NAME}_${TARGET_ARCH}]: ${OUT_DIR}/libvosk.a"
 }
 
 # ------------------------------------------------------------------------------
-# 4. 编译 tvOS 单架构静态库
+# 4. Build tvOS Static Library
 # ------------------------------------------------------------------------------
 build_tvos_static() {
     local SDK=$1
@@ -339,7 +342,7 @@ build_tvos_static() {
     local SDK_PATH=$3
     local KALDI_ROOT="${SCRIPT_DIR}/kaldi"
 
-    echo "--> 正在编译 tvOS 静态库 [${SDK} / ${TARGET_ARCH}]..."
+    echo "--> Building tvOS static library [${SDK} / ${TARGET_ARCH}]..."
 
     local SDK_FLAG=""
     local PLATFORM_NAME=""
@@ -357,7 +360,6 @@ build_tvos_static() {
     compile_openfst "${ARCH_FLAGS}" "${HOST_FLAGS}"
     compile_kaldi "${ARCH_FLAGS}" 0
 
-    # Vosk API tvOS 打包
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
     make -s -j$(sysctl -n hw.ncpu) \
@@ -374,29 +376,29 @@ build_tvos_static() {
     local OUT_DIR="${DIST_DIR}/tvos/${PLATFORM_NAME}_${TARGET_ARCH}"
     archive_static_lib "${OUT_DIR}"
 
-    echo "✔ tvOS 静态库打包完成 [${PLATFORM_NAME}_${TARGET_ARCH}]: ${OUT_DIR}/libvosk.a"
+    echo "[OK] tvOS static library packaged [${PLATFORM_NAME}_${TARGET_ARCH}]: ${OUT_DIR}/libvosk.a"
 }
 
 # ------------------------------------------------------------------------------
-# 5. 单架构组合构建 helper (依次构建动态库与静态库)
+# 5. Combined Helper for macOS Target (Shared + Static)
 # ------------------------------------------------------------------------------
 build_macos_target_combined() {
     local TARGET_ARCH=$1
     echo "========================================================="
-    echo "▶ 开始为 macOS [ ${TARGET_ARCH} ] 构建动态库与静态库..."
+    echo ">> Building macOS dynamic & static libraries [ ${TARGET_ARCH} ]..."
     echo "========================================================="
 
     build_macos_shared "${TARGET_ARCH}"
     build_macos_static "${TARGET_ARCH}"
 
-    echo "✔ macOS [ ${TARGET_ARCH} ] 构建完成 -> ${DIST_DIR}/macos/${TARGET_ARCH}/"
+    echo "[OK] macOS [ ${TARGET_ARCH} ] build complete -> ${DIST_DIR}/macos/${TARGET_ARCH}/"
 }
 
 # ------------------------------------------------------------------------------
-# 6. 高阶全量模块打包器 (macOS / iOS / tvOS / All)
+# 6. High-level Multi-arch Builders (macOS / iOS / tvOS / visionOS / All)
 # ------------------------------------------------------------------------------
 build_macos_all() {
-    echo "--> 正在构建 macOS 双架构 Universal (arm64 + x86_64) 全量库及 XCFramework..."
+    echo "--> Building macOS Universal (arm64 + x86_64) libraries & XCFramework..."
     build_macos_target_combined "x86_64"
     build_macos_target_combined "arm64"
 
@@ -423,13 +425,13 @@ build_macos_all() {
         -headers "${HEADERS_DIR}" \
         -output "${MACOS_XCFRAMEWORK_DIR}"
 
-    echo "✔ 成功合成 macOS Universal 动态库: dist/macos/universal/libvosk.dylib"
-    echo "✔ 成功合成 macOS Universal 静态库: dist/macos/universal/libvosk.a"
-    echo "✔ 成功生成 macOS libvosk.xcframework: ${MACOS_XCFRAMEWORK_DIR}"
+    echo "[OK] macOS Universal dynamic library: dist/macos/universal/libvosk.dylib"
+    echo "[OK] macOS Universal static library: dist/macos/universal/libvosk.a"
+    echo "[OK] macOS libvosk.xcframework: ${MACOS_XCFRAMEWORK_DIR}"
 }
 
 build_ios_all() {
-    echo "--> 正在构建 iOS 全量平台静态库与 XCFramework..."
+    echo "--> Building iOS platform static libraries & XCFramework..."
     mkdir -p "${DIST_DIR}/ios/iphonesimulator_universal"
 
     if [ -n "${IPHONEOS_SDK_PATH}" ]; then
@@ -460,12 +462,12 @@ build_ios_all() {
 
     if [ ${#XCF_ARGS[@]} -gt 0 ]; then
         xcodebuild -create-xcframework "${XCF_ARGS[@]}" -output "${XCFRAMEWORK_DIR}"
-        echo "✔ 成功生成 iOS libvosk.xcframework: ${XCFRAMEWORK_DIR}"
+        echo "[OK] Generated iOS libvosk.xcframework: ${XCFRAMEWORK_DIR}"
     fi
 }
 
 build_tvos_all() {
-    echo "--> 正在构建 tvOS 全量平台静态库与 XCFramework..."
+    echo "--> Building tvOS platform static libraries & XCFramework..."
     mkdir -p "${DIST_DIR}/tvos/appletvsimulator_universal"
 
     if [ -n "${APPLETVOS_SDK_PATH}" ]; then
@@ -496,102 +498,7 @@ build_tvos_all() {
 
     if [ ${#XCF_ARGS[@]} -gt 0 ]; then
         xcodebuild -create-xcframework "${XCF_ARGS[@]}" -output "${XCFRAMEWORK_DIR}"
-        echo "✔ 成功生成 tvOS libvosk.xcframework: ${XCFRAMEWORK_DIR}"
-    fi
-}
-
-build_watchos_static() {
-    local SDK=$1
-    local TARGET_ARCH=$2
-    local SDK_PATH=$3
-    local KALDI_ROOT="${SCRIPT_DIR}/kaldi"
-
-    echo "--> 正在编译 watchOS 静态库 [${SDK} / ${TARGET_ARCH}]..."
-
-    local SDK_FLAG=""
-    local PLATFORM_NAME=""
-    if [ "$SDK" = "watchos" ]; then
-        SDK_FLAG="-mwatchos-version-min=${DEPLOYMENT_TARGET_WATCHOS}"
-        PLATFORM_NAME="watchos"
-    else
-        SDK_FLAG="-mwatchos-simulator-version-min=${DEPLOYMENT_TARGET_WATCHOS}"
-        PLATFORM_NAME="watchsimulator"
-    fi
-
-    local ARCH_FLAGS="-arch ${TARGET_ARCH} -isysroot ${SDK_PATH} ${SDK_FLAG}"
-    local HOST_FLAGS="--host=${TARGET_ARCH}-apple-darwin"
-
-    compile_openfst "${ARCH_FLAGS}" "${HOST_FLAGS}"
-    compile_kaldi "${ARCH_FLAGS}" 0
-
-    cd "${SCRIPT_DIR}/vosk-api/src"
-    make clean || true
-    make -s -j$(sysctl -n hw.ncpu) \
-        recognizer.o language_model.o model.o spk_model.o vosk_api.o postprocessor.o \
-        KALDI_ROOT="${KALDI_ROOT}" \
-        OPENFST_ROOT="${KALDI_ROOT}/tools/openfst-1.8.0" \
-        HAVE_ACCELERATE=1 \
-        HAVE_OPENBLAS_CLAPACK=0 \
-        HAVE_MKL=0 \
-        USE_SHARED=0 \
-        EXTRA_CFLAGS="${ARCH_FLAGS}" \
-        EXTRA_LDFLAGS="${ARCH_FLAGS}"
-
-    local OUT_DIR="${DIST_DIR}/watchos/${PLATFORM_NAME}_${TARGET_ARCH}"
-    archive_static_lib "${OUT_DIR}"
-
-    echo "✔ watchOS 静态库打包完成 [${PLATFORM_NAME}_${TARGET_ARCH}]: ${OUT_DIR}/libvosk.a"
-}
-
-build_watchos_all() {
-    echo "--> 正在构建 watchOS 全量平台静态库与 XCFramework..."
-    mkdir -p "${DIST_DIR}/watchos/watchos_universal"
-    mkdir -p "${DIST_DIR}/watchos/watchsimulator_universal"
-
-    if [ -n "${WATCHOS_SDK_PATH}" ]; then
-        build_watchos_static "watchos" "arm64_32" "${WATCHOS_SDK_PATH}" || true
-        build_watchos_static "watchos" "arm64" "${WATCHOS_SDK_PATH}" || true
-
-        if [ -f "${DIST_DIR}/watchos/watchos_arm64_32/libvosk.a" ] && [ -f "${DIST_DIR}/watchos/watchos_arm64/libvosk.a" ]; then
-            lipo -create \
-                "${DIST_DIR}/watchos/watchos_arm64_32/libvosk.a" \
-                "${DIST_DIR}/watchos/watchos_arm64/libvosk.a" \
-                -output "${DIST_DIR}/watchos/watchos_universal/libvosk.a"
-        fi
-    fi
-    if [ -n "${WATCHSIMULATOR_SDK_PATH}" ]; then
-        build_watchos_static "watchsimulator" "arm64" "${WATCHSIMULATOR_SDK_PATH}" || true
-        build_watchos_static "watchsimulator" "x86_64" "${WATCHSIMULATOR_SDK_PATH}" || true
-
-        if [ -f "${DIST_DIR}/watchos/watchsimulator_arm64/libvosk.a" ] && [ -f "${DIST_DIR}/watchos/watchsimulator_x86_64/libvosk.a" ]; then
-            lipo -create \
-                "${DIST_DIR}/watchos/watchsimulator_arm64/libvosk.a" \
-                "${DIST_DIR}/watchos/watchsimulator_x86_64/libvosk.a" \
-                -output "${DIST_DIR}/watchos/watchsimulator_universal/libvosk.a"
-        fi
-    fi
-
-    local HEADERS_DIR=$(prepare_headers)
-    local XCFRAMEWORK_DIR="${DIST_DIR}/watchos/libvosk.xcframework"
-    rm -rf "${XCFRAMEWORK_DIR}"
-    
-    local XCF_ARGS=()
-    if [ -f "${DIST_DIR}/watchos/watchos_universal/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchos_universal/libvosk.a" -headers "${HEADERS_DIR}")
-    elif [ -f "${DIST_DIR}/watchos/watchos_arm64_32/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchos_arm64_32/libvosk.a" -headers "${HEADERS_DIR}")
-    elif [ -f "${DIST_DIR}/watchos/watchos_arm64/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
-    fi
-    if [ -f "${DIST_DIR}/watchos/watchsimulator_universal/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchsimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
-    elif [ -f "${DIST_DIR}/watchos/watchsimulator_arm64/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchsimulator_arm64/libvosk.a" -headers "${HEADERS_DIR}")
-    fi
-
-    if [ ${#XCF_ARGS[@]} -gt 0 ]; then
-        xcodebuild -create-xcframework "${XCF_ARGS[@]}" -output "${XCFRAMEWORK_DIR}"
-        echo "✔ 成功生成 watchOS libvosk.xcframework: ${XCFRAMEWORK_DIR}"
+        echo "[OK] Generated tvOS libvosk.xcframework: ${XCFRAMEWORK_DIR}"
     fi
 }
 
@@ -601,20 +508,20 @@ build_visionos_static() {
     local SDK_PATH=$3
     local KALDI_ROOT="${SCRIPT_DIR}/kaldi"
 
-    echo "--> 正在编译 visionOS 静态库 [${SDK} / ${TARGET_ARCH}]..."
+    echo "--> Building visionOS static library [${SDK} / ${TARGET_ARCH}]..."
 
-    local SDK_FLAG=""
+    local TARGET_TRIPLE=""
     local PLATFORM_NAME=""
     if [ "$SDK" = "xros" ]; then
-        SDK_FLAG="-target arm64-apple-xros${DEPLOYMENT_TARGET_VISIONOS}"
+        TARGET_TRIPLE="arm64-apple-xros${DEPLOYMENT_TARGET_VISIONOS}"
         PLATFORM_NAME="xros"
     else
-        SDK_FLAG="-target arm64-apple-xros${DEPLOYMENT_TARGET_VISIONOS}-simulator"
+        TARGET_TRIPLE="arm64-apple-xros${DEPLOYMENT_TARGET_VISIONOS}-simulator"
         PLATFORM_NAME="xrsimulator"
     fi
 
-    local ARCH_FLAGS="-arch ${TARGET_ARCH} -isysroot ${SDK_PATH} ${SDK_FLAG}"
-    local HOST_FLAGS="--host=${TARGET_ARCH}-apple-darwin"
+    local ARCH_FLAGS="-target ${TARGET_TRIPLE} -isysroot ${SDK_PATH}"
+    local HOST_FLAGS="--host=aarch64-apple-darwin"
 
     compile_openfst "${ARCH_FLAGS}" "${HOST_FLAGS}"
     compile_kaldi "${ARCH_FLAGS}" 0
@@ -635,16 +542,16 @@ build_visionos_static() {
     local OUT_DIR="${DIST_DIR}/visionos/${PLATFORM_NAME}_${TARGET_ARCH}"
     archive_static_lib "${OUT_DIR}"
 
-    echo "✔ visionOS 静态库打包完成 [${PLATFORM_NAME}_${TARGET_ARCH}]: ${OUT_DIR}/libvosk.a"
+    echo "[OK] visionOS static library packaged [${PLATFORM_NAME}_${TARGET_ARCH}]: ${OUT_DIR}/libvosk.a"
 }
 
 build_visionos_all() {
-    echo "--> 正在构建 visionOS 全量平台静态库与 XCFramework..."
+    echo "--> Building visionOS platform static libraries & XCFramework..."
     if [ -n "${XROS_SDK_PATH}" ]; then
-        build_visionos_static "xros" "arm64" "${XROS_SDK_PATH}" || true
+        build_visionos_static "xros" "arm64" "${XROS_SDK_PATH}"
     fi
     if [ -n "${XRSIMULATOR_SDK_PATH}" ]; then
-        build_visionos_static "xrsimulator" "arm64" "${XRSIMULATOR_SDK_PATH}" || true
+        build_visionos_static "xrsimulator" "arm64" "${XRSIMULATOR_SDK_PATH}"
     fi
 
     local HEADERS_DIR=$(prepare_headers)
@@ -661,16 +568,15 @@ build_visionos_all() {
 
     if [ ${#XCF_ARGS[@]} -gt 0 ]; then
         xcodebuild -create-xcframework "${XCF_ARGS[@]}" -output "${XCFRAMEWORK_DIR}"
-        echo "✔ 成功生成 visionOS libvosk.xcframework: ${XCFRAMEWORK_DIR}"
+        echo "[OK] Generated visionOS libvosk.xcframework: ${XCFRAMEWORK_DIR}"
     fi
 }
 
 build_apple_all() {
-    echo "--> 正在执行 Apple 全平台 (macOS + iOS + tvOS + watchOS + visionOS) 大一统编译流程..."
+    echo "--> Building Apple multi-platform (macOS + iOS + tvOS + visionOS) Super XCFramework..."
     build_macos_all
     build_ios_all
     build_tvos_all
-    build_watchos_all
     build_visionos_all
 
     local HEADERS_DIR=$(prepare_headers)
@@ -694,16 +600,6 @@ build_apple_all() {
     if [ -f "${DIST_DIR}/tvos/appletvsimulator_universal/libvosk.a" ]; then
         XCF_ARGS+=(-library "${DIST_DIR}/tvos/appletvsimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
     fi
-    if [ -f "${DIST_DIR}/watchos/watchos_universal/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchos_universal/libvosk.a" -headers "${HEADERS_DIR}")
-    elif [ -f "${DIST_DIR}/watchos/watchos_arm64_32/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchos_arm64_32/libvosk.a" -headers "${HEADERS_DIR}")
-    elif [ -f "${DIST_DIR}/watchos/watchos_arm64/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
-    fi
-    if [ -f "${DIST_DIR}/watchos/watchsimulator_universal/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchsimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
-    fi
     if [ -f "${DIST_DIR}/visionos/xros_arm64/libvosk.a" ]; then
         XCF_ARGS+=(-library "${DIST_DIR}/visionos/xros_arm64/libvosk.a" -headers "${HEADERS_DIR}")
     fi
@@ -713,12 +609,12 @@ build_apple_all() {
 
     if [ ${#XCF_ARGS[@]} -gt 0 ]; then
         xcodebuild -create-xcframework "${XCF_ARGS[@]}" -output "${XCFRAMEWORK_DIR}"
-        echo "✔ 成功生成 Apple 全平台 Super XCFramework: ${XCFRAMEWORK_DIR}"
+        echo "[OK] Generated Apple multi-platform Super XCFramework: ${XCFRAMEWORK_DIR}"
     fi
 }
 
 # ------------------------------------------------------------------------------
-# 调度入口
+# Dispatch Entry
 # ------------------------------------------------------------------------------
 if [ "$COMMAND" = "help" ] || [ "$COMMAND" = "-h" ] || [ "$COMMAND" = "--help" ]; then
     show_help
@@ -745,12 +641,15 @@ case "$COMMAND" in
         build_tvos_all
         ;;
 
-    watchos)
-        build_watchos_all
-        ;;
-
     visionos)
-        build_visionos_all
+        CHOSEN_ARCH="${SPECIFIED_ARCH:-all}"
+        if [ "$CHOSEN_ARCH" = "universal" ] || [ "$CHOSEN_ARCH" = "all" ]; then
+            build_visionos_all
+        elif [ "$CHOSEN_ARCH" = "simulator" ] || [ "$CHOSEN_ARCH" = "xrsimulator" ]; then
+            build_visionos_static "xrsimulator" "arm64" "${XRSIMULATOR_SDK_PATH}"
+        else
+            build_visionos_static "xros" "arm64" "${XROS_SDK_PATH}"
+        fi
         ;;
 
     all)
@@ -758,7 +657,7 @@ case "$COMMAND" in
         ;;
 
     *)
-        echo "❌ 错误: 未知的指令 '$COMMAND'"
+        echo "[ERROR] Error: Unknown command '$COMMAND'"
         echo ""
         show_help
         exit 1
