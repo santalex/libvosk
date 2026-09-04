@@ -45,6 +45,11 @@ def check_file(filename):
             is_valid = True
             reasons = []
 
+            # 0. 规范命名检查：杜绝误将 xcframework 当作架构打包出的畸形包
+            if "xcframework-static" in filename or "-libvosk.xcframework" in filename:
+                is_valid = False
+                reasons.append(f"Invalid / malformed package name: {filename}")
+
             # 1. 基础完整性检查：杜绝 0 字节损坏文件
             for info in infolist:
                 if not info.filename.endswith("/") and info.file_size == 0:

@@ -56,12 +56,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS
+          # macOS (Universal: arm64 + x86_64)
           - os: macos
-            arch: arm64
-            runner: macos-14
-          - os: macos
-            arch: x86_64
+            arch: universal
             runner: macos-14
           # iOS
           - os: ios
@@ -128,7 +125,7 @@ jobs:
         if: |
           (github.event_name == 'push') ||
           ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
-           (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch))
+           (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch || (matrix.arch == 'universal' && (inputs.target_arch == 'arm64' || inputs.target_arch == 'x86_64'))))
         uses: actions/checkout@v7
 
       - name: Install macOS Build Tools
@@ -136,7 +133,7 @@ jobs:
           (runner.os == 'macOS') &&
           ((github.event_name == 'push') ||
            ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
-            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
+            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch || (matrix.arch == 'universal' && (inputs.target_arch == 'arm64' || inputs.target_arch == 'x86_64')))))
         run: |
           brew untap aws/tap 2>/dev/null || true
           HOMEBREW_NO_AUTO_UPDATE=1 brew install autoconf automake libtool
@@ -146,7 +143,7 @@ jobs:
           (runner.os == 'Windows') &&
           ((github.event_name == 'push') ||
            ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
-            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
+            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch || (matrix.arch == 'universal' && (inputs.target_arch == 'arm64' || inputs.target_arch == 'x86_64')))))
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.arch == 'x86' && 'x86' || (matrix.arch == 'arm64' && 'arm64' || 'x64') }}
@@ -156,7 +153,7 @@ jobs:
           (runner.os != 'Windows') &&
           ((github.event_name == 'push') ||
            ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
-            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
+            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch || (matrix.arch == 'universal' && (inputs.target_arch == 'arm64' || inputs.target_arch == 'x86_64')))))
         run: |
           VOSK_TAG="${{ inputs.vosk_tag || 'v0.3.50' }}"
           ./build.sh --os ${{ matrix.os }} --arch ${{ matrix.arch }} --vosk-tag "${VOSK_TAG}" --yes
@@ -166,14 +163,15 @@ jobs:
           ((runner.os == 'macOS' && matrix.os == 'macos') || (runner.os == 'Linux' && matrix.os == 'linux' && matrix.arch == 'x86_64')) &&
           ((github.event_name == 'push') ||
            ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
-            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
+            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch || (matrix.arch == 'universal' && (inputs.target_arch == 'arm64' || inputs.target_arch == 'x86_64')))))
         run: |
-          if [ "${{ matrix.os }}" = "macos" ] && [ "${{ matrix.arch }}" = "arm64" ]; then
-            # arm64: runner 是 ARM 原生硬件，直接执行
+          if [ "${{ matrix.os }}" = "macos" ]; then
+            echo "--> [1/3] 测试 macOS arm64 原生二进制..."
             ./tests/run_tests.sh dist/macos/arm64
-          elif [ "${{ matrix.os }}" = "macos" ] && [ "${{ matrix.arch }}" = "x86_64" ]; then
-            # x86_64: runner 是 macos-14 ARM，通过 Rosetta 2 执行 x86_64 二进制
+            echo "--> [2/3] 测试 macOS x86_64 (Rosetta 2) 二进制..."
             arch -x86_64 ./tests/run_tests.sh dist/macos/x86_64
+            echo "--> [3/3] 测试 macOS Universal 胖二进制..."
+            ./tests/run_tests.sh dist/macos/universal
           elif [ "${{ matrix.os }}" = "linux" ] && [ "${{ matrix.arch }}" = "x86_64" ]; then
             ./tests/run_tests.sh dist/linux/x86_64
           fi
@@ -183,7 +181,7 @@ jobs:
           (runner.os == 'Windows') &&
           ((github.event_name == 'push') ||
            ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
-            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
+            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch || (matrix.arch == 'universal' && (inputs.target_arch == 'arm64' || inputs.target_arch == 'x86_64')))))
         shell: powershell
         run: |
           $VOSK_TAG = "${{ inputs.vosk_tag || 'v0.3.50' }}"
@@ -194,7 +192,7 @@ jobs:
           (runner.os == 'Windows' && matrix.arch == 'x86_64') &&
           ((github.event_name == 'push') ||
            ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
-            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
+            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch || (matrix.arch == 'universal' && (inputs.target_arch == 'arm64' || inputs.target_arch == 'x86_64')))))
         shell: powershell
         run: |
           $testSrc = "tests\test_vosk_e2e.c"
@@ -278,7 +276,7 @@ jobs:
           always() &&
           ((github.event_name == 'push') ||
            ((inputs.target_os == 'all' || inputs.target_os == matrix.os) &&
-            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch)))
+            (inputs.target_arch == 'all' || inputs.target_arch == matrix.arch || (matrix.arch == 'universal' && (inputs.target_arch == 'arm64' || inputs.target_arch == 'x86_64')))))
         uses: actions/upload-artifact@v7
         with:
           name: vosk-${{ matrix.os }}-${{ matrix.arch }}

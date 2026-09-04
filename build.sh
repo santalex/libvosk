@@ -112,11 +112,18 @@ package_all() {
     find "${DIST_DIR}" -mindepth 2 -maxdepth 2 -type d | while read -r dir; do
         rel_path="${dir#"${DIST_DIR}"/}"
         
-        # 避免处理 apple, python 等特殊目录
-        if [[ "$rel_path" == *"apple"* ]] || [[ "$rel_path" == *"python"* ]]; then continue; fi
+        # 避免处理 Apple 系列、特殊目录及 XCFramework 目录
+        if [[ "$rel_path" == *".xcframework"* ]] || [[ "$rel_path" == *"apple"* ]] || [[ "$rel_path" == *"headers"* ]] || [[ "$rel_path" == *"python"* ]]; then
+            continue
+        fi
 
         os_name=$(echo "$rel_path" | cut -d'/' -f1)
         arch_name=$(echo "$rel_path" | cut -d'/' -f2)
+
+        # Apple 相关操作系统统一在 Apple 专用段以规范化方式打包
+        if [ "$os_name" = "macos" ] || [ "$os_name" = "ios" ] || [ "$os_name" = "tvos" ] || [ "$os_name" = "watchos" ] || [ "$os_name" = "visionos" ]; then
+            continue
+        fi
         
         if [ -n "$os_name" ] && [ -n "$arch_name" ]; then
             if [ "$os_name" = "windows" ]; then
@@ -150,18 +157,18 @@ package_all() {
     done
 
     # 2. Apple 平台 (macOS / iOS / tvOS / macOS XCFramework)
-    if [ -d "${DIST_DIR}/apple" ] || [ -d "${DIST_DIR}/macos" ]; then
+    if [ -d "${DIST_DIR}/macos" ] || [ -d "${DIST_DIR}/ios" ] || [ -d "${DIST_DIR}/tvos" ]; then
         echo "Packaging Apple (macOS / iOS / tvOS / XCFramework) Zip packages..."
-        mac_arm64_dylib=$(find "${DIST_DIR}" -path "*/macos/arm64/*" -name "*.dylib" 2>/dev/null | head -n 1)
-        mac_x86_dylib=$(find "${DIST_DIR}" -path "*/macos/x86_64/*" -name "*.dylib" 2>/dev/null | head -n 1)
-        mac_arm64_a=$(find "${DIST_DIR}" -path "*/macos/arm64/*" -name "*.a" 2>/dev/null | head -n 1)
-        mac_x86_a=$(find "${DIST_DIR}" -path "*/macos/x86_64/*" -name "*.a" 2>/dev/null | head -n 1)
+        mac_arm64_dylib=$(find "${DIST_DIR}/macos/arm64" -name "*.dylib" 2>/dev/null | head -n 1)
+        mac_x86_dylib=$(find "${DIST_DIR}/macos/x86_64" -name "*.dylib" 2>/dev/null | head -n 1)
+        mac_arm64_a=$(find "${DIST_DIR}/macos/arm64" -name "*.a" 2>/dev/null | head -n 1)
+        mac_x86_a=$(find "${DIST_DIR}/macos/x86_64" -name "*.a" 2>/dev/null | head -n 1)
         mac_header=$(find "${DIST_DIR}" -name "vosk_api.h" 2>/dev/null | head -n 1)
 
         # 单架构 macOS
         for mac_arch in arm64 x86_64; do
-            mac_dir=$(find "${DIST_DIR}" -type d -path "*/macos/${mac_arch}" 2>/dev/null | head -n 1)
-            if [ -n "$mac_dir" ]; then
+            mac_dir="${DIST_DIR}/macos/${mac_arch}"
+            if [ -d "$mac_dir" ]; then
                 pkg_prefix="libvosk-${VOSK_TAG}-macos-${mac_arch}"
                 mkdir -p tmp_mac_shared
                 find "$mac_dir" -name "*.dylib" -exec cp -f {} tmp_mac_shared/ \; 2>/dev/null || true
@@ -211,17 +218,17 @@ package_all() {
 
         # iOS / tvOS 平台静态包与 XCFramework 包
         for apple_os in ios tvos; do
-            apple_dir=$(find "${DIST_DIR}" -type d -name "$apple_os" 2>/dev/null | head -n 1)
-            if [ -n "$apple_dir" ]; then
+            apple_dir="${DIST_DIR}/${apple_os}"
+            if [ -d "$apple_dir" ]; then
                 mkdir -p tmp_apple_static
-                find "$apple_dir" -name "*.a" -exec cp -f {} tmp_apple_static/ \; 2>/dev/null || true
+                find "$apple_dir" -name "*.a" -not -path "*.xcframework/*" -exec cp -f {} tmp_apple_static/ \; 2>/dev/null || true
                 if [ -n "$(find tmp_apple_static -type f -name "*.a" 2>/dev/null)" ]; then
                     if [ -n "$mac_header" ]; then cp "$mac_header" tmp_apple_static/; fi
                     (cd tmp_apple_static && zip -r -q "${PKG_DIR}/libvosk-${VOSK_TAG}-${apple_os}-static.zip" .)
                 fi
                 rm -rf tmp_apple_static
 
-                xcf_dir=$(find "$apple_dir" -type d -name "*.xcframework" 2>/dev/null | head -n 1)
+                xcf_dir=$(find "$apple_dir" -maxdepth 2 -type d -name "*.xcframework" 2>/dev/null | head -n 1)
                 if [ -n "$xcf_dir" ]; then
                     mkdir -p tmp_apple_xcf
                     cp -R "$xcf_dir" tmp_apple_xcf/
@@ -237,26 +244,33 @@ package_all() {
             mkdir -p tmp_apple_super
             mkdir -p tmp_headers && cp "$mac_header" tmp_headers/
 
-            mac_a=$(find "${DIST_DIR}" -path "*/macos/universal/libvosk.a" -o -path "*/macos/arm64/libvosk.a" 2>/dev/null | head -n 1)
-            ios_arm64_a=$(find "${DIST_DIR}" -path "*/iphoneos_arm64/libvosk.a" 2>/dev/null | head -n 1)
-            ios_sim_a=$(find "${DIST_DIR}" -path "*/iphonesimulator_universal/libvosk.a" 2>/dev/null | head -n 1)
-            tvos_arm64_a=$(find "${DIST_DIR}" -path "*/appletvos_arm64/libvosk.a" 2>/dev/null | head -n 1)
-            tvos_sim_a=$(find "${DIST_DIR}" -path "*/appletvsimulator_universal/libvosk.a" 2>/dev/null | head -n 1)
+            mac_a=$(find "${DIST_DIR}/macos" -name "libvosk.a" 2>/dev/null | grep universal | head -n 1)
+            if [ -z "$mac_a" ]; then mac_a=$(find "${DIST_DIR}/macos" -name "libvosk.a" 2>/dev/null | head -n 1); fi
+            ios_arm64_a=$(find "${DIST_DIR}/ios" -path "*/iphoneos_arm64/libvosk.a" 2>/dev/null | head -n 1)
+            ios_sim_a=$(find "${DIST_DIR}/ios" -path "*/iphonesimulator_universal/libvosk.a" 2>/dev/null | head -n 1)
+            tvos_arm64_a=$(find "${DIST_DIR}/tvos" -path "*/appletvos_arm64/libvosk.a" 2>/dev/null | head -n 1)
+            tvos_sim_a=$(find "${DIST_DIR}/tvos" -path "*/appletvsimulator_universal/libvosk.a" 2>/dev/null | head -n 1)
 
             XCF_CMD=(xcodebuild -create-xcframework)
-            if [ -n "$mac_a" ]; then XCF_CMD+=(-library "$mac_a" -headers tmp_headers); fi
-            if [ -n "$ios_arm64_a" ]; then XCF_CMD+=(-library "$ios_arm64_a" -headers tmp_headers); fi
-            if [ -n "$ios_sim_a" ]; then XCF_CMD+=(-library "$ios_sim_a" -headers tmp_headers); fi
-            if [ -n "$tvos_arm64_a" ]; then XCF_CMD+=(-library "$tvos_arm64_a" -headers tmp_headers); fi
-            if [ -n "$tvos_sim_a" ]; then XCF_CMD+=(-library "$tvos_sim_a" -headers tmp_headers); fi
+            apple_targets_count=0
+            if [ -n "$mac_a" ]; then XCF_CMD+=(-library "$mac_a" -headers tmp_headers); apple_targets_count=$((apple_targets_count + 1)); fi
+            if [ -n "$ios_arm64_a" ]; then XCF_CMD+=(-library "$ios_arm64_a" -headers tmp_headers); apple_targets_count=$((apple_targets_count + 1)); fi
+            if [ -n "$ios_sim_a" ]; then XCF_CMD+=(-library "$ios_sim_a" -headers tmp_headers); apple_targets_count=$((apple_targets_count + 1)); fi
+            if [ -n "$tvos_arm64_a" ]; then XCF_CMD+=(-library "$tvos_arm64_a" -headers tmp_headers); apple_targets_count=$((apple_targets_count + 1)); fi
+            if [ -n "$tvos_sim_a" ]; then XCF_CMD+=(-library "$tvos_sim_a" -headers tmp_headers); apple_targets_count=$((apple_targets_count + 1)); fi
             XCF_CMD+=(-output tmp_apple_super/libvosk.xcframework)
 
-            "${XCF_CMD[@]}" 2>/dev/null || true
-            rm -rf tmp_headers
+            # 仅在集齐至少 2 个及以上跨系统/跨平台目标切片时才组装 Apple 全平台 Super XCFramework
+            if [ "$apple_targets_count" -ge 2 ]; then
+                "${XCF_CMD[@]}" 2>/dev/null || true
+                rm -rf tmp_headers
 
-            if [ -d "tmp_apple_super/libvosk.xcframework" ]; then
-                cp "$mac_header" tmp_apple_super/ 2>/dev/null || true
-                (cd tmp_apple_super && zip -r -q "${PKG_DIR}/libvosk-${VOSK_TAG}-apple-xcframework.zip" .)
+                if [ -d "tmp_apple_super/libvosk.xcframework" ]; then
+                    cp "$mac_header" tmp_apple_super/ 2>/dev/null || true
+                    (cd tmp_apple_super && zip -r -q "${PKG_DIR}/libvosk-${VOSK_TAG}-apple-xcframework.zip" .)
+                fi
+            else
+                rm -rf tmp_headers
             fi
             rm -rf tmp_apple_super
         fi
@@ -268,7 +282,7 @@ package_all() {
         python3 -m pip install setuptools wheel cffi >/dev/null 2>&1 || true
 
         # A. 单目标 Wheel
-        for dylib_path in $(find "${DIST_DIR}" -name "libvosk.dylib" -o -name "libvosk.so" -o -name "libvosk.dll" 2>/dev/null); do
+        for dylib_path in $(find "${DIST_DIR}" \( -name "libvosk.dylib" -o -name "libvosk.so" -o -name "libvosk.dll" \) -not -path "*.xcframework/*" 2>/dev/null); do
             target_name=$(basename $(dirname "$dylib_path"))
             os_name=$(basename $(dirname $(dirname "$dylib_path")))
             if [ -n "$target_name" ] && [ -n "$os_name" ] && [ "$os_name" != "." ] && [ "$os_name" != "dist" ] && [ "$target_name" != "universal" ]; then
@@ -292,7 +306,7 @@ package_all() {
             fi
         done
 
-        # B. OS Universal Wheel
+        # B. OS Universal Wheel (要求该系统下至少聚合 2 个及以上子架构)
         for os_sys in macos windows linux android; do
             plat_out="${os_sys}_universal"
             if [ "$os_sys" = "macos" ]; then plat_out="macosx_universal"; fi
@@ -302,7 +316,7 @@ package_all() {
             cp -R src/python/vosk/* tmp_os_build/vosk/
             cp src/python/setup.py tmp_os_build/
             found_count=0
-            for dylib_path in $(find "${DIST_DIR}" -name "libvosk.dylib" -o -name "libvosk.so" -o -name "libvosk.dll" 2>/dev/null); do
+            for dylib_path in $(find "${DIST_DIR}" \( -name "libvosk.dylib" -o -name "libvosk.so" -o -name "libvosk.dll" \) -not -path "*.xcframework/*" 2>/dev/null); do
                 if [[ "$dylib_path" == *"${os_sys}"* ]]; then
                     arch_sub=$(basename $(dirname "$dylib_path"))
                     mkdir -p "tmp_os_build/vosk/lib/${os_sys}_${arch_sub}"
@@ -313,7 +327,7 @@ package_all() {
                     found_count=$((found_count + 1))
                 fi
             done
-            if [ $found_count -gt 0 ]; then
+            if [ $found_count -ge 2 ]; then
                 echo "Packaging OS-Universal Python Wheel [${plat_out}] -> libvosk-${VOSK_TAG//v/}-py3-none-${plat_out}.whl ..."
                 (cd tmp_os_build && VOSK_TAG="${VOSK_TAG}" python3 setup.py bdist_wheel --plat-name="${plat_out}" >/dev/null 2>&1) || true
                 cp tmp_os_build/dist/*.whl "${PKG_DIR}/" 2>/dev/null || true
@@ -321,12 +335,12 @@ package_all() {
             rm -rf tmp_os_build
         done
 
-        # C. Super Any Universal Wheel
-        echo "Packaging Super Universal Python Wheel -> libvosk-${VOSK_TAG//v/}-py3-none-any.whl ..."
+        # C. Super Any Universal Wheel (要求至少聚合 2 个及以上跨平台动态库)
+        found_any_count=0
         rm -rf tmp_all_build && mkdir -p tmp_all_build/vosk/lib
         cp -R src/python/vosk/* tmp_all_build/vosk/
         cp src/python/setup.py tmp_all_build/
-        for dylib_path in $(find "${DIST_DIR}" -name "libvosk.dylib" -o -name "libvosk.so" -o -name "libvosk.dll" 2>/dev/null); do
+        for dylib_path in $(find "${DIST_DIR}" \( -name "libvosk.dylib" -o -name "libvosk.so" -o -name "libvosk.dll" \) -not -path "*.xcframework/*" 2>/dev/null); do
             target_sub=$(basename $(dirname "$dylib_path"))
             os_sub=$(basename $(dirname $(dirname "$dylib_path")))
             mkdir -p "tmp_all_build/vosk/lib/${os_sub}_${target_sub}"
@@ -334,9 +348,13 @@ package_all() {
             if [ "$os_sub" = "windows" ]; then
                 find "$(dirname "$dylib_path")" -maxdepth 1 -name "*.dll" -exec cp -f {} "tmp_all_build/vosk/lib/${os_sub}_${target_sub}/" \; 2>/dev/null || true
             fi
+            found_any_count=$((found_any_count + 1))
         done
-        (cd tmp_all_build && VOSK_TAG="${VOSK_TAG}" python3 setup.py bdist_wheel --plat-name="any" >/dev/null 2>&1) || true
-        cp tmp_all_build/dist/*.whl "${PKG_DIR}/" 2>/dev/null || true
+        if [ $found_any_count -ge 2 ]; then
+            echo "Packaging Super Universal Python Wheel -> libvosk-${VOSK_TAG//v/}-py3-none-any.whl ..."
+            (cd tmp_all_build && VOSK_TAG="${VOSK_TAG}" python3 setup.py bdist_wheel --plat-name="any" >/dev/null 2>&1) || true
+            cp tmp_all_build/dist/*.whl "${PKG_DIR}/" 2>/dev/null || true
+        fi
         rm -rf tmp_all_build
     fi
 
@@ -430,16 +448,9 @@ build_apple_native() {
     fi
     VOSK_TAG="${VOSK_TAG}" bash "${SCRIPT_DIR}/src/apple/build.sh" "${PLATFORM}" "${ARCH_ARG}"
 
-    echo "--> 正在抽取同步 Apple 目标二进制产物到根目录 dist/ 及 dist/apple/ ..."
-    local APPLE_DIST_SRC="${SCRIPT_DIR}/src/apple/dist"
     local ROOT_DIST_DST="${SCRIPT_DIR}/dist"
-
-    if [ -d "${APPLE_DIST_SRC}" ]; then
-        mkdir -p "${ROOT_DIST_DST}" "${ROOT_DIST_DST}/apple"
-        cp -Rf "${APPLE_DIST_SRC}/"* "${ROOT_DIST_DST}/" 2>/dev/null || true
-        cp -Rf "${APPLE_DIST_SRC}/"* "${ROOT_DIST_DST}/apple/" 2>/dev/null || true
-        rm -rf "${APPLE_DIST_SRC}"
-    fi
+    # 清理可能残留的历史临时目录
+    rm -rf "${SCRIPT_DIR}/src/apple/dist" "${ROOT_DIST_DST}/apple"
 
     if [ -d "${ROOT_DIST_DST}/${PLATFORM}/${ARCH_ARG}" ]; then
         echo "✔ 🎉 Apple [${PLATFORM} - ${ARCH_ARG}] 产物导出成功: ${ROOT_DIST_DST}/${PLATFORM}/${ARCH_ARG}"

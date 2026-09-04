@@ -14,6 +14,8 @@ set -e
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+DIST_DIR="${DIST_DIR:-${REPO_ROOT}/dist}"
 COMMAND="${1:-macos}"
 SPECIFIED_ARCH="$2"
 
@@ -23,6 +25,7 @@ DEPLOYMENT_TARGET_TVOS="12.0"
 DEPLOYMENT_TARGET_WATCHOS="6.0"
 DEPLOYMENT_TARGET_VISIONOS="1.0"
 export MACOSX_DEPLOYMENT_TARGET="${DEPLOYMENT_TARGET_MACOS}"
+export MAKEFLAGS="-s --no-print-directory"
 
 MACOS_SDK_PATH=$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)
 IPHONEOS_SDK_PATH=$(xcrun --sdk iphoneos --show-sdk-path 2>/dev/null || true)
@@ -92,8 +95,8 @@ prepare_dependencies() {
     if [ ! -d "kaldi/tools/openfst-1.8.0" ]; then
         echo "--> 正在为 Apple 平台编译 OpenFST..."
         cd kaldi/tools
-        git clone --depth=1 https://github.com/alphacep/openfst openfst-1.8.0
-        make -s openfst
+        git clone -q --depth=1 https://github.com/alphacep/openfst openfst-1.8.0
+        make -s openfst LIBTOOLFLAGS="--silent" OPENFST_CONFIGURE="--enable-silent-rules"
         cd "${SCRIPT_DIR}"
     fi
 
@@ -127,7 +130,8 @@ compile_openfst() {
     rm -f openfst-1.8.0/Makefile || true
 
     make -s -j$(sysctl -n hw.ncpu) openfst \
-        OPENFST_CONFIGURE="${HOST_FLAGS} --enable-static --enable-shared --enable-far --enable-ngram-fsts --enable-lookahead-fsts --with-pic" \
+        OPENFST_CONFIGURE="${HOST_FLAGS} --enable-silent-rules --enable-static --enable-shared --enable-far --enable-ngram-fsts --enable-lookahead-fsts --with-pic" \
+        LIBTOOLFLAGS="--silent" \
         CXXFLAGS="-O3 ${ARCH_FLAGS}" CFLAGS="-O3 ${ARCH_FLAGS}" LDFLAGS="${ARCH_FLAGS}"
 }
 
@@ -206,7 +210,7 @@ archive_static_lib() {
 # 内部 Helper 函数: 准备 头文件 目录
 # ------------------------------------------------------------------------------
 prepare_headers() {
-    local HEADERS_DIR="${SCRIPT_DIR}/dist/headers"
+    local HEADERS_DIR="${DIST_DIR}/headers"
     mkdir -p "${HEADERS_DIR}"
     cp -f "${SCRIPT_DIR}/vosk-api/src/vosk_api.h" "${HEADERS_DIR}/"
     echo "${HEADERS_DIR}"
@@ -238,7 +242,7 @@ build_macos_shared() {
         EXTRA_CFLAGS="${ARCH_FLAGS}" \
         EXTRA_LDFLAGS="${ARCH_FLAGS} -Wl,-install_name,@rpath/libvosk.dylib"
 
-    local OUT_DIR="${SCRIPT_DIR}/dist/macos/${TARGET_ARCH}"
+    local OUT_DIR="${DIST_DIR}/macos/${TARGET_ARCH}"
     mkdir -p "${OUT_DIR}"
     cp -fv libvosk.dylib "${OUT_DIR}/libvosk.dylib"
     cp -fv "${SCRIPT_DIR}/vosk-api/src/vosk_api.h" "${OUT_DIR}/vosk_api.h" 2>/dev/null || true
@@ -273,7 +277,7 @@ build_macos_static() {
         EXTRA_CFLAGS="${ARCH_FLAGS}" \
         EXTRA_LDFLAGS="${ARCH_FLAGS}"
 
-    local OUT_DIR="${SCRIPT_DIR}/dist/macos/${TARGET_ARCH}"
+    local OUT_DIR="${DIST_DIR}/macos/${TARGET_ARCH}"
     archive_static_lib "${OUT_DIR}"
 
     echo "✔ macOS 静态库打包完成 [${TARGET_ARCH}]: ${OUT_DIR}/libvosk.a"
@@ -320,7 +324,7 @@ build_ios_static() {
         EXTRA_CFLAGS="${ARCH_FLAGS}" \
         EXTRA_LDFLAGS="${ARCH_FLAGS}"
 
-    local OUT_DIR="${SCRIPT_DIR}/dist/ios/${PLATFORM_NAME}_${TARGET_ARCH}"
+    local OUT_DIR="${DIST_DIR}/ios/${PLATFORM_NAME}_${TARGET_ARCH}"
     archive_static_lib "${OUT_DIR}"
 
     echo "✔ iOS 静态库打包完成 [${PLATFORM_NAME}_${TARGET_ARCH}]: ${OUT_DIR}/libvosk.a"
@@ -367,7 +371,7 @@ build_tvos_static() {
         EXTRA_CFLAGS="${ARCH_FLAGS}" \
         EXTRA_LDFLAGS="${ARCH_FLAGS}"
 
-    local OUT_DIR="${SCRIPT_DIR}/dist/tvos/${PLATFORM_NAME}_${TARGET_ARCH}"
+    local OUT_DIR="${DIST_DIR}/tvos/${PLATFORM_NAME}_${TARGET_ARCH}"
     archive_static_lib "${OUT_DIR}"
 
     echo "✔ tvOS 静态库打包完成 [${PLATFORM_NAME}_${TARGET_ARCH}]: ${OUT_DIR}/libvosk.a"
@@ -385,7 +389,7 @@ build_macos_target_combined() {
     build_macos_shared "${TARGET_ARCH}"
     build_macos_static "${TARGET_ARCH}"
 
-    echo "✔ macOS [ ${TARGET_ARCH} ] 构建完成 -> ${SCRIPT_DIR}/dist/macos/${TARGET_ARCH}/"
+    echo "✔ macOS [ ${TARGET_ARCH} ] 构建完成 -> ${DIST_DIR}/macos/${TARGET_ARCH}/"
 }
 
 # ------------------------------------------------------------------------------
@@ -396,26 +400,26 @@ build_macos_all() {
     build_macos_target_combined "x86_64"
     build_macos_target_combined "arm64"
 
-    mkdir -p "${SCRIPT_DIR}/dist/macos/universal"
+    mkdir -p "${DIST_DIR}/macos/universal"
 
     lipo -create \
-        "${SCRIPT_DIR}/dist/macos/x86_64/libvosk.dylib" \
-        "${SCRIPT_DIR}/dist/macos/arm64/libvosk.dylib" \
-        -output "${SCRIPT_DIR}/dist/macos/universal/libvosk.dylib"
+        "${DIST_DIR}/macos/x86_64/libvosk.dylib" \
+        "${DIST_DIR}/macos/arm64/libvosk.dylib" \
+        -output "${DIST_DIR}/macos/universal/libvosk.dylib"
 
     lipo -create \
-        "${SCRIPT_DIR}/dist/macos/x86_64/libvosk.a" \
-        "${SCRIPT_DIR}/dist/macos/arm64/libvosk.a" \
-        -output "${SCRIPT_DIR}/dist/macos/universal/libvosk.a"
+        "${DIST_DIR}/macos/x86_64/libvosk.a" \
+        "${DIST_DIR}/macos/arm64/libvosk.a" \
+        -output "${DIST_DIR}/macos/universal/libvosk.a"
 
-    cp -fv "${SCRIPT_DIR}/vosk-api/src/vosk_api.h" "${SCRIPT_DIR}/dist/macos/universal/vosk_api.h" 2>/dev/null || true
+    cp -fv "${SCRIPT_DIR}/vosk-api/src/vosk_api.h" "${DIST_DIR}/macos/universal/vosk_api.h" 2>/dev/null || true
 
     local HEADERS_DIR=$(prepare_headers)
 
-    local MACOS_XCFRAMEWORK_DIR="${SCRIPT_DIR}/dist/macos/libvosk.xcframework"
+    local MACOS_XCFRAMEWORK_DIR="${DIST_DIR}/macos/libvosk.xcframework"
     rm -rf "${MACOS_XCFRAMEWORK_DIR}"
     xcodebuild -create-xcframework \
-        -library "${SCRIPT_DIR}/dist/macos/universal/libvosk.a" \
+        -library "${DIST_DIR}/macos/universal/libvosk.a" \
         -headers "${HEADERS_DIR}" \
         -output "${MACOS_XCFRAMEWORK_DIR}"
 
@@ -426,7 +430,7 @@ build_macos_all() {
 
 build_ios_all() {
     echo "--> 正在构建 iOS 全量平台静态库与 XCFramework..."
-    mkdir -p "${SCRIPT_DIR}/dist/ios/iphonesimulator_universal"
+    mkdir -p "${DIST_DIR}/ios/iphonesimulator_universal"
 
     if [ -n "${IPHONEOS_SDK_PATH}" ]; then
         build_ios_static "iphoneos" "arm64" "${IPHONEOS_SDK_PATH}"
@@ -436,22 +440,22 @@ build_ios_all() {
         build_ios_static "iphonesimulator" "x86_64" "${IPHONESIMULATOR_SDK_PATH}"
 
         lipo -create \
-            "${SCRIPT_DIR}/dist/ios/iphonesimulator_arm64/libvosk.a" \
-            "${SCRIPT_DIR}/dist/ios/iphonesimulator_x86_64/libvosk.a" \
-            -output "${SCRIPT_DIR}/dist/ios/iphonesimulator_universal/libvosk.a"
+            "${DIST_DIR}/ios/iphonesimulator_arm64/libvosk.a" \
+            "${DIST_DIR}/ios/iphonesimulator_x86_64/libvosk.a" \
+            -output "${DIST_DIR}/ios/iphonesimulator_universal/libvosk.a"
     fi
 
     local HEADERS_DIR=$(prepare_headers)
 
-    local XCFRAMEWORK_DIR="${SCRIPT_DIR}/dist/ios/libvosk.xcframework"
+    local XCFRAMEWORK_DIR="${DIST_DIR}/ios/libvosk.xcframework"
     rm -rf "${XCFRAMEWORK_DIR}"
     
     local XCF_ARGS=()
-    if [ -f "${SCRIPT_DIR}/dist/ios/iphoneos_arm64/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/ios/iphoneos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/ios/iphoneos_arm64/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/ios/iphoneos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
     fi
-    if [ -f "${SCRIPT_DIR}/dist/ios/iphonesimulator_universal/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/ios/iphonesimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/ios/iphonesimulator_universal/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/ios/iphonesimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
     fi
 
     if [ ${#XCF_ARGS[@]} -gt 0 ]; then
@@ -462,7 +466,7 @@ build_ios_all() {
 
 build_tvos_all() {
     echo "--> 正在构建 tvOS 全量平台静态库与 XCFramework..."
-    mkdir -p "${SCRIPT_DIR}/dist/tvos/appletvsimulator_universal"
+    mkdir -p "${DIST_DIR}/tvos/appletvsimulator_universal"
 
     if [ -n "${APPLETVOS_SDK_PATH}" ]; then
         build_tvos_static "appletvos" "arm64" "${APPLETVOS_SDK_PATH}"
@@ -472,22 +476,22 @@ build_tvos_all() {
         build_tvos_static "appletvsimulator" "x86_64" "${APPLETVSIMULATOR_SDK_PATH}"
 
         lipo -create \
-            "${SCRIPT_DIR}/dist/tvos/appletvsimulator_arm64/libvosk.a" \
-            "${SCRIPT_DIR}/dist/tvos/appletvsimulator_x86_64/libvosk.a" \
-            -output "${SCRIPT_DIR}/dist/tvos/appletvsimulator_universal/libvosk.a"
+            "${DIST_DIR}/tvos/appletvsimulator_arm64/libvosk.a" \
+            "${DIST_DIR}/tvos/appletvsimulator_x86_64/libvosk.a" \
+            -output "${DIST_DIR}/tvos/appletvsimulator_universal/libvosk.a"
     fi
 
     local HEADERS_DIR=$(prepare_headers)
 
-    local XCFRAMEWORK_DIR="${SCRIPT_DIR}/dist/tvos/libvosk.xcframework"
+    local XCFRAMEWORK_DIR="${DIST_DIR}/tvos/libvosk.xcframework"
     rm -rf "${XCFRAMEWORK_DIR}"
     
     local XCF_ARGS=()
-    if [ -f "${SCRIPT_DIR}/dist/tvos/appletvos_arm64/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/tvos/appletvos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/tvos/appletvos_arm64/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/tvos/appletvos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
     fi
-    if [ -f "${SCRIPT_DIR}/dist/tvos/appletvsimulator_universal/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/tvos/appletvsimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/tvos/appletvsimulator_universal/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/tvos/appletvsimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
     fi
 
     if [ ${#XCF_ARGS[@]} -gt 0 ]; then
@@ -533,7 +537,7 @@ build_watchos_static() {
         EXTRA_CFLAGS="${ARCH_FLAGS}" \
         EXTRA_LDFLAGS="${ARCH_FLAGS}"
 
-    local OUT_DIR="${SCRIPT_DIR}/dist/watchos/${PLATFORM_NAME}_${TARGET_ARCH}"
+    local OUT_DIR="${DIST_DIR}/watchos/${PLATFORM_NAME}_${TARGET_ARCH}"
     archive_static_lib "${OUT_DIR}"
 
     echo "✔ watchOS 静态库打包完成 [${PLATFORM_NAME}_${TARGET_ARCH}]: ${OUT_DIR}/libvosk.a"
@@ -541,48 +545,48 @@ build_watchos_static() {
 
 build_watchos_all() {
     echo "--> 正在构建 watchOS 全量平台静态库与 XCFramework..."
-    mkdir -p "${SCRIPT_DIR}/dist/watchos/watchos_universal"
-    mkdir -p "${SCRIPT_DIR}/dist/watchos/watchsimulator_universal"
+    mkdir -p "${DIST_DIR}/watchos/watchos_universal"
+    mkdir -p "${DIST_DIR}/watchos/watchsimulator_universal"
 
     if [ -n "${WATCHOS_SDK_PATH}" ]; then
         build_watchos_static "watchos" "arm64_32" "${WATCHOS_SDK_PATH}" || true
         build_watchos_static "watchos" "arm64" "${WATCHOS_SDK_PATH}" || true
 
-        if [ -f "${SCRIPT_DIR}/dist/watchos/watchos_arm64_32/libvosk.a" ] && [ -f "${SCRIPT_DIR}/dist/watchos/watchos_arm64/libvosk.a" ]; then
+        if [ -f "${DIST_DIR}/watchos/watchos_arm64_32/libvosk.a" ] && [ -f "${DIST_DIR}/watchos/watchos_arm64/libvosk.a" ]; then
             lipo -create \
-                "${SCRIPT_DIR}/dist/watchos/watchos_arm64_32/libvosk.a" \
-                "${SCRIPT_DIR}/dist/watchos/watchos_arm64/libvosk.a" \
-                -output "${SCRIPT_DIR}/dist/watchos/watchos_universal/libvosk.a"
+                "${DIST_DIR}/watchos/watchos_arm64_32/libvosk.a" \
+                "${DIST_DIR}/watchos/watchos_arm64/libvosk.a" \
+                -output "${DIST_DIR}/watchos/watchos_universal/libvosk.a"
         fi
     fi
     if [ -n "${WATCHSIMULATOR_SDK_PATH}" ]; then
         build_watchos_static "watchsimulator" "arm64" "${WATCHSIMULATOR_SDK_PATH}" || true
         build_watchos_static "watchsimulator" "x86_64" "${WATCHSIMULATOR_SDK_PATH}" || true
 
-        if [ -f "${SCRIPT_DIR}/dist/watchos/watchsimulator_arm64/libvosk.a" ] && [ -f "${SCRIPT_DIR}/dist/watchos/watchsimulator_x86_64/libvosk.a" ]; then
+        if [ -f "${DIST_DIR}/watchos/watchsimulator_arm64/libvosk.a" ] && [ -f "${DIST_DIR}/watchos/watchsimulator_x86_64/libvosk.a" ]; then
             lipo -create \
-                "${SCRIPT_DIR}/dist/watchos/watchsimulator_arm64/libvosk.a" \
-                "${SCRIPT_DIR}/dist/watchos/watchsimulator_x86_64/libvosk.a" \
-                -output "${SCRIPT_DIR}/dist/watchos/watchsimulator_universal/libvosk.a"
+                "${DIST_DIR}/watchos/watchsimulator_arm64/libvosk.a" \
+                "${DIST_DIR}/watchos/watchsimulator_x86_64/libvosk.a" \
+                -output "${DIST_DIR}/watchos/watchsimulator_universal/libvosk.a"
         fi
     fi
 
     local HEADERS_DIR=$(prepare_headers)
-    local XCFRAMEWORK_DIR="${SCRIPT_DIR}/dist/watchos/libvosk.xcframework"
+    local XCFRAMEWORK_DIR="${DIST_DIR}/watchos/libvosk.xcframework"
     rm -rf "${XCFRAMEWORK_DIR}"
     
     local XCF_ARGS=()
-    if [ -f "${SCRIPT_DIR}/dist/watchos/watchos_universal/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchos_universal/libvosk.a" -headers "${HEADERS_DIR}")
-    elif [ -f "${SCRIPT_DIR}/dist/watchos/watchos_arm64_32/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchos_arm64_32/libvosk.a" -headers "${HEADERS_DIR}")
-    elif [ -f "${SCRIPT_DIR}/dist/watchos/watchos_arm64/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/watchos/watchos_universal/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchos_universal/libvosk.a" -headers "${HEADERS_DIR}")
+    elif [ -f "${DIST_DIR}/watchos/watchos_arm64_32/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchos_arm64_32/libvosk.a" -headers "${HEADERS_DIR}")
+    elif [ -f "${DIST_DIR}/watchos/watchos_arm64/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
     fi
-    if [ -f "${SCRIPT_DIR}/dist/watchos/watchsimulator_universal/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchsimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
-    elif [ -f "${SCRIPT_DIR}/dist/watchos/watchsimulator_arm64/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchsimulator_arm64/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/watchos/watchsimulator_universal/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchsimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
+    elif [ -f "${DIST_DIR}/watchos/watchsimulator_arm64/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchsimulator_arm64/libvosk.a" -headers "${HEADERS_DIR}")
     fi
 
     if [ ${#XCF_ARGS[@]} -gt 0 ]; then
@@ -628,7 +632,7 @@ build_visionos_static() {
         EXTRA_CFLAGS="${ARCH_FLAGS}" \
         EXTRA_LDFLAGS="${ARCH_FLAGS}"
 
-    local OUT_DIR="${SCRIPT_DIR}/dist/visionos/${PLATFORM_NAME}_${TARGET_ARCH}"
+    local OUT_DIR="${DIST_DIR}/visionos/${PLATFORM_NAME}_${TARGET_ARCH}"
     archive_static_lib "${OUT_DIR}"
 
     echo "✔ visionOS 静态库打包完成 [${PLATFORM_NAME}_${TARGET_ARCH}]: ${OUT_DIR}/libvosk.a"
@@ -644,15 +648,15 @@ build_visionos_all() {
     fi
 
     local HEADERS_DIR=$(prepare_headers)
-    local XCFRAMEWORK_DIR="${SCRIPT_DIR}/dist/visionos/libvosk.xcframework"
+    local XCFRAMEWORK_DIR="${DIST_DIR}/visionos/libvosk.xcframework"
     rm -rf "${XCFRAMEWORK_DIR}"
     
     local XCF_ARGS=()
-    if [ -f "${SCRIPT_DIR}/dist/visionos/xros_arm64/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/visionos/xros_arm64/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/visionos/xros_arm64/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/visionos/xros_arm64/libvosk.a" -headers "${HEADERS_DIR}")
     fi
-    if [ -f "${SCRIPT_DIR}/dist/visionos/xrsimulator_arm64/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/visionos/xrsimulator_arm64/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/visionos/xrsimulator_arm64/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/visionos/xrsimulator_arm64/libvosk.a" -headers "${HEADERS_DIR}")
     fi
 
     if [ ${#XCF_ARGS[@]} -gt 0 ]; then
@@ -671,40 +675,40 @@ build_apple_all() {
 
     local HEADERS_DIR=$(prepare_headers)
 
-    local XCFRAMEWORK_DIR="${SCRIPT_DIR}/dist/apple/libvosk.xcframework"
+    local XCFRAMEWORK_DIR="${DIST_DIR}/apple-xcframework/libvosk.xcframework"
     rm -rf "${XCFRAMEWORK_DIR}"
     
     local XCF_ARGS=()
-    if [ -f "${SCRIPT_DIR}/dist/macos/universal/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/macos/universal/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/macos/universal/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/macos/universal/libvosk.a" -headers "${HEADERS_DIR}")
     fi
-    if [ -f "${SCRIPT_DIR}/dist/ios/iphoneos_arm64/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/ios/iphoneos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/ios/iphoneos_arm64/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/ios/iphoneos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
     fi
-    if [ -f "${SCRIPT_DIR}/dist/ios/iphonesimulator_universal/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/ios/iphonesimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/ios/iphonesimulator_universal/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/ios/iphonesimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
     fi
-    if [ -f "${SCRIPT_DIR}/dist/tvos/appletvos_arm64/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/tvos/appletvos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/tvos/appletvos_arm64/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/tvos/appletvos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
     fi
-    if [ -f "${SCRIPT_DIR}/dist/tvos/appletvsimulator_universal/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/tvos/appletvsimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/tvos/appletvsimulator_universal/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/tvos/appletvsimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
     fi
-    if [ -f "${SCRIPT_DIR}/dist/watchos/watchos_universal/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchos_universal/libvosk.a" -headers "${HEADERS_DIR}")
-    elif [ -f "${SCRIPT_DIR}/dist/watchos/watchos_arm64_32/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchos_arm64_32/libvosk.a" -headers "${HEADERS_DIR}")
-    elif [ -f "${SCRIPT_DIR}/dist/watchos/watchos_arm64/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/watchos/watchos_universal/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchos_universal/libvosk.a" -headers "${HEADERS_DIR}")
+    elif [ -f "${DIST_DIR}/watchos/watchos_arm64_32/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchos_arm64_32/libvosk.a" -headers "${HEADERS_DIR}")
+    elif [ -f "${DIST_DIR}/watchos/watchos_arm64/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchos_arm64/libvosk.a" -headers "${HEADERS_DIR}")
     fi
-    if [ -f "${SCRIPT_DIR}/dist/watchos/watchsimulator_universal/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/watchos/watchsimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/watchos/watchsimulator_universal/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/watchos/watchsimulator_universal/libvosk.a" -headers "${HEADERS_DIR}")
     fi
-    if [ -f "${SCRIPT_DIR}/dist/visionos/xros_arm64/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/visionos/xros_arm64/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/visionos/xros_arm64/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/visionos/xros_arm64/libvosk.a" -headers "${HEADERS_DIR}")
     fi
-    if [ -f "${SCRIPT_DIR}/dist/visionos/xrsimulator_arm64/libvosk.a" ]; then
-        XCF_ARGS+=(-library "${SCRIPT_DIR}/dist/visionos/xrsimulator_arm64/libvosk.a" -headers "${HEADERS_DIR}")
+    if [ -f "${DIST_DIR}/visionos/xrsimulator_arm64/libvosk.a" ]; then
+        XCF_ARGS+=(-library "${DIST_DIR}/visionos/xrsimulator_arm64/libvosk.a" -headers "${HEADERS_DIR}")
     fi
 
     if [ ${#XCF_ARGS[@]} -gt 0 ]; then
