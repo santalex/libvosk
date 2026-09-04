@@ -132,7 +132,7 @@ compile_openfst() {
     local APPLE_CXX=$(xcrun -f clang++)
 
     make -s -j$(sysctl -n hw.ncpu) openfst \
-        OPENFST_CONFIGURE="${HOST_FLAGS} --enable-silent-rules --enable-static --disable-shared --enable-far --enable-ngram-fsts --enable-lookahead-fsts --with-pic" \
+        OPENFST_CONFIGURE="${HOST_FLAGS} --enable-silent-rules --enable-static --enable-shared --enable-far --enable-ngram-fsts --enable-lookahead-fsts --with-pic" \
         LIBTOOLFLAGS="--silent" \
         CC="${APPLE_CC} ${ARCH_FLAGS}" \
         CXX="${APPLE_CXX} ${ARCH_FLAGS}" \
@@ -236,13 +236,12 @@ build_macos_shared() {
 
     cd "${SCRIPT_DIR}/vosk-api/src"
     make clean || true
-    make -s -j$(sysctl -n hw.ncpu) \
-        KALDI_ROOT="${KALDI_ROOT}" \
+    KALDI_ROOT="${KALDI_ROOT}" EXT=dylib make -s -j$(sysctl -n hw.ncpu) \
         OPENFST_ROOT="${KALDI_ROOT}/tools/openfst-1.8.0" \
         HAVE_ACCELERATE=1 \
         HAVE_OPENBLAS_CLAPACK=0 \
         HAVE_MKL=0 \
-        USE_SHARED=1 \
+        USE_SHARED=0 \
         EXTRA_CFLAGS="${ARCH_FLAGS}" \
         EXTRA_LDFLAGS="${ARCH_FLAGS} -Wl,-install_name,@rpath/libvosk.dylib"
 

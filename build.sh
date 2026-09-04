@@ -178,8 +178,6 @@ package_all() {
                 mkdir -p tmp_mac_shared
                 find "$mac_dir" -name "*.dylib" -exec cp -f {} tmp_mac_shared/ \; 2>/dev/null || true
                 if [ -n "$(find tmp_mac_shared -type f -name "*.dylib" 2>/dev/null)" ]; then
-                    if [ "$mac_arch" = "arm64" ]; then mac_arm64_dylib="$(find tmp_mac_shared -name "*.dylib")"; fi
-                    if [ "$mac_arch" = "x86_64" ]; then mac_x86_dylib="$(find tmp_mac_shared -name "*.dylib")"; fi
                     if [ -n "$mac_header" ]; then cp "$mac_header" tmp_mac_shared/; fi
                     (cd tmp_mac_shared && zip -r -q "${PKG_DIR}/${pkg_prefix}-shared.zip" .)
                 fi
@@ -188,8 +186,6 @@ package_all() {
                 mkdir -p tmp_mac_static
                 find "$mac_dir" -name "*.a" -exec cp -f {} tmp_mac_static/ \; 2>/dev/null || true
                 if [ -n "$(find tmp_mac_static -type f -name "*.a" 2>/dev/null)" ]; then
-                    if [ "$mac_arch" = "arm64" ]; then mac_arm64_a="$(find tmp_mac_static -name "*.a")"; fi
-                    if [ "$mac_arch" = "x86_64" ]; then mac_x86_a="$(find tmp_mac_static -name "*.a")"; fi
                     if [ -n "$mac_header" ]; then cp "$mac_header" tmp_mac_static/; fi
                     (cd tmp_mac_static && zip -r -q "${PKG_DIR}/${pkg_prefix}-static.zip" .)
                 fi
@@ -198,29 +194,45 @@ package_all() {
         done
 
         # Universal macOS & macOS XCFramework
-        if [ -n "$mac_arm64_dylib" ] && [ -n "$mac_x86_dylib" ] && [ "$(uname)" = "Darwin" ]; then
+        mac_arm64_dylib=$(find "${DIST_DIR}/macos/arm64" -name "*.dylib" 2>/dev/null | head -n 1)
+        mac_x86_dylib=$(find "${DIST_DIR}/macos/x86_64" -name "*.dylib" 2>/dev/null | head -n 1)
+        mac_arm64_a=$(find "${DIST_DIR}/macos/arm64" -name "*.a" 2>/dev/null | head -n 1)
+        mac_x86_a=$(find "${DIST_DIR}/macos/x86_64" -name "*.a" 2>/dev/null | head -n 1)
+
+        if [ -n "$mac_arm64_dylib" ] && [ -n "$mac_x86_dylib" ] && [ -f "$mac_arm64_dylib" ] && [ -f "$mac_x86_dylib" ] && [ "$(uname)" = "Darwin" ]; then
+            echo "Packaging macOS Universal Shared Zip -> libvosk-${VOSK_TAG}-macos-universal-shared.zip ..."
             mkdir -p tmp_mac_uni
             lipo -create "$mac_arm64_dylib" "$mac_x86_dylib" -output tmp_mac_uni/libvosk.dylib 2>/dev/null || true
+            if [ -f "tmp_mac_uni/libvosk.dylib" ]; then
+                mkdir -p "${DIST_DIR}/macos/universal" && cp -f tmp_mac_uni/libvosk.dylib "${DIST_DIR}/macos/universal/"
+                mkdir -p tmp_mac_shared && cp tmp_mac_uni/libvosk.dylib tmp_mac_shared/ && if [ -n "$mac_header" ]; then cp "$mac_header" tmp_mac_shared/; fi
+                (cd tmp_mac_shared && zip -r -q "${PKG_DIR}/libvosk-${VOSK_TAG}-macos-universal-shared.zip" .)
+                rm -rf tmp_mac_shared
+            fi
+            rm -rf tmp_mac_uni
+        fi
+
+        if [ -n "$mac_arm64_a" ] && [ -n "$mac_x86_a" ] && [ -f "$mac_arm64_a" ] && [ -f "$mac_x86_a" ] && [ "$(uname)" = "Darwin" ]; then
+            echo "Packaging macOS Universal Static Zip -> libvosk-${VOSK_TAG}-macos-universal-static.zip ..."
+            mkdir -p tmp_mac_uni
             lipo -create "$mac_arm64_a" "$mac_x86_a" -output tmp_mac_uni/libvosk.a 2>/dev/null || true
-            if [ -n "$mac_header" ]; then cp "$mac_header" tmp_mac_uni/; fi
+            if [ -f "tmp_mac_uni/libvosk.a" ]; then
+                mkdir -p "${DIST_DIR}/macos/universal" && cp -f tmp_mac_uni/libvosk.a "${DIST_DIR}/macos/universal/"
+                mkdir -p tmp_mac_static && cp tmp_mac_uni/libvosk.a tmp_mac_static/ && if [ -n "$mac_header" ]; then cp "$mac_header" tmp_mac_static/; fi
+                (cd tmp_mac_static && zip -r -q "${PKG_DIR}/libvosk-${VOSK_TAG}-macos-universal-static.zip" .)
+                rm -rf tmp_mac_static
 
-            mkdir -p tmp_mac_shared && cp tmp_mac_uni/libvosk.dylib tmp_mac_shared/ && if [ -n "$mac_header" ]; then cp "$mac_header" tmp_mac_shared/; fi
-            (cd tmp_mac_shared && zip -r -q "${PKG_DIR}/libvosk-${VOSK_TAG}-macos-universal-shared.zip" .)
-            rm -rf tmp_mac_shared
-
-            mkdir -p tmp_mac_static && cp tmp_mac_uni/libvosk.a tmp_mac_static/ && if [ -n "$mac_header" ]; then cp "$mac_header" tmp_mac_static/; fi
-            (cd tmp_mac_static && zip -r -q "${PKG_DIR}/libvosk-${VOSK_TAG}-macos-universal-static.zip" .)
-            rm -rf tmp_mac_static
-
-            if [ -n "$mac_header" ]; then
-                mkdir -p tmp_headers && cp "$mac_header" tmp_headers/
-                xcodebuild -create-xcframework -library tmp_mac_uni/libvosk.a -headers tmp_headers -output tmp_mac_uni/libvosk.xcframework 2>/dev/null || true
-                if [ -d "tmp_mac_uni/libvosk.xcframework" ]; then
-                    mkdir -p tmp_mac_xcf && cp -R tmp_mac_uni/libvosk.xcframework tmp_mac_xcf/ && cp "$mac_header" tmp_mac_xcf/
-                    (cd tmp_mac_xcf && zip -r -q "${PKG_DIR}/libvosk-${VOSK_TAG}-macos-xcframework.zip" .)
-                    rm -rf tmp_mac_xcf
+                if [ -n "$mac_header" ]; then
+                    mkdir -p tmp_headers && cp "$mac_header" tmp_headers/
+                    xcodebuild -create-xcframework -library tmp_mac_uni/libvosk.a -headers tmp_headers -output tmp_mac_uni/libvosk.xcframework 2>/dev/null || true
+                    if [ -d "tmp_mac_uni/libvosk.xcframework" ]; then
+                        echo "Packaging macOS XCFramework Zip -> libvosk-${VOSK_TAG}-macos-xcframework.zip ..."
+                        mkdir -p tmp_mac_xcf && cp -R tmp_mac_uni/libvosk.xcframework tmp_mac_xcf/ && cp "$mac_header" tmp_mac_xcf/
+                        (cd tmp_mac_xcf && zip -r -q "${PKG_DIR}/libvosk-${VOSK_TAG}-macos-xcframework.zip" .)
+                        rm -rf tmp_mac_xcf
+                    fi
+                    rm -rf tmp_headers
                 fi
-                rm -rf tmp_headers
             fi
             rm -rf tmp_mac_uni
         fi
@@ -232,6 +244,7 @@ package_all() {
                 mkdir -p tmp_apple_static
                 find "$apple_dir" -name "*.a" -not -path "*.xcframework/*" -exec cp -f {} tmp_apple_static/ \; 2>/dev/null || true
                 if [ -n "$(find tmp_apple_static -type f -name "*.a" 2>/dev/null)" ]; then
+                    echo "Packaging Apple [${apple_os}] Static Zip -> libvosk-${VOSK_TAG}-${apple_os}-static.zip ..."
                     if [ -n "$mac_header" ]; then cp "$mac_header" tmp_apple_static/; fi
                     (cd tmp_apple_static && zip -r -q "${PKG_DIR}/libvosk-${VOSK_TAG}-${apple_os}-static.zip" .)
                 fi
@@ -239,6 +252,7 @@ package_all() {
 
                 xcf_dir=$(find "$apple_dir" -maxdepth 2 -type d -name "*.xcframework" 2>/dev/null | head -n 1)
                 if [ -n "$xcf_dir" ]; then
+                    echo "Packaging Apple [${apple_os}] XCFramework Zip -> libvosk-${VOSK_TAG}-${apple_os}-xcframework.zip ..."
                     mkdir -p tmp_apple_xcf
                     cp -R "$xcf_dir" tmp_apple_xcf/
                     if [ -n "$mac_header" ]; then cp "$mac_header" tmp_apple_xcf/; fi
@@ -275,6 +289,7 @@ package_all() {
 
             # Assemble Super XCFramework when at least 2 cross-platform slices exist
             if [ "$apple_targets_count" -ge 2 ]; then
+                echo "Packaging Apple Multi-Platform Super XCFramework Zip -> libvosk-${VOSK_TAG}-apple-xcframework.zip ..."
                 "${XCF_CMD[@]}" 2>/dev/null || true
                 rm -rf tmp_headers
 
@@ -286,6 +301,28 @@ package_all() {
                 rm -rf tmp_headers
             fi
             rm -rf tmp_apple_super
+
+            # 4. Apple Multi-Platform Unified Static Package (macOS + iOS + tvOS + visionOS for non-Xcode builds)
+            if [ "$apple_targets_count" -ge 2 ]; then
+                mkdir -p tmp_apple_all_static
+                found_apple_static=0
+                for apple_os in macos ios tvos visionos; do
+                    if [ -d "${DIST_DIR}/${apple_os}" ]; then
+                        for a_file in $(find "${DIST_DIR}/${apple_os}" -name "*.a" -not -path "*.xcframework/*" 2>/dev/null); do
+                            sub_target=$(basename $(dirname "$a_file"))
+                            mkdir -p "tmp_apple_all_static/${apple_os}/${sub_target}"
+                            cp -f "$a_file" "tmp_apple_all_static/${apple_os}/${sub_target}/"
+                            found_apple_static=$((found_apple_static + 1))
+                        done
+                    fi
+                done
+                if [ "$found_apple_static" -gt 0 ]; then
+                    echo "Packaging Apple Multi-Platform Unified Static Zip -> libvosk-${VOSK_TAG}-apple-static.zip ..."
+                    cp "$mac_header" tmp_apple_all_static/
+                    (cd tmp_apple_all_static && zip -r -q "${PKG_DIR}/libvosk-${VOSK_TAG}-apple-static.zip" .)
+                fi
+                rm -rf tmp_apple_all_static
+            fi
         fi
     fi
 

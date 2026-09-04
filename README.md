@@ -43,7 +43,7 @@ This repository provides an automated, hermetic, multi-platform build engine and
 | **iOS** | `universal` *(iOS 12.0+)* | - | `libvosk-ios-static.zip` (`.a`) | `libvosk-ios-xcframework.zip` |
 | **tvOS** | `universal` *(tvOS 12.0+)* | - | `libvosk-tvos-static.zip` (`.a`) | `libvosk-tvos-xcframework.zip` |
 | **visionOS** | `universal` *(visionOS 1.0+)* | - | `libvosk-visionos-static.zip` (`.a`) | `libvosk-visionos-xcframework.zip` |
-| **Apple** | `universal` (macOS+iOS+tvOS+visionOS) | - | - | `libvosk-apple-xcframework.zip` (Super `XCFramework`) |
+| **Apple** | `universal` (macOS+iOS+tvOS+visionOS) | - | `libvosk-apple-static.zip` (All Apple `.a`) | `libvosk-apple-xcframework.zip` (Super `XCFramework`) |
 | **Windows (MSVC)** | `x86_64` | `libvosk-windows-msvc-x86_64-shared.zip` | `libvosk-windows-msvc-x86_64-static.zip` | - |
 | **Windows (MSVC)** | `arm64` | `libvosk-windows-msvc-arm64-shared.zip` | `libvosk-windows-msvc-arm64-static.zip` | - |
 | **Windows (MSVC)** | `x86` | `libvosk-windows-msvc-x86-shared.zip` | `libvosk-windows-msvc-x86-static.zip` | - |
