@@ -218,7 +218,7 @@ jobs:
           }
           
           # --- [1/2] Dynamic Library (libvosk.dll) E2E Test ---
-          $implib = if (Test-Path "$libDir\libvosk_dll.lib") { "libvosk_dll.lib" } else { "libvosk.lib" }
+          $implib = if (Test-Path "$libDir\libvosk.lib") { "libvosk.lib" } else { "libvosk_dll.lib" }
           & cl.exe /nologo /MD /O2 /I"$incDir" "$testSrc" /link /LIBPATH:"$libDir" $implib /OUT:"tests\test_e2e_dll.exe"
           if ($LASTEXITCODE -ne 0) {
             Write-Error "DLL test compilation failed with exit code $LASTEXITCODE"
@@ -233,10 +233,11 @@ jobs:
           }
           Write-Host "[PASS] [1/2] DLL E2E test passed." -ForegroundColor Green
 
-          # --- [2/2] Static Library (libvosk.lib) E2E Test ---
-          $staticLib = "$libDir\libvosk.lib"
+          # --- [2/2] Static Library (libvosk_static.lib) E2E Test ---
+          $staticLib = if (Test-Path "$libDir\libvosk_static.lib") { "$libDir\libvosk_static.lib" } else { "$libDir\libvosk.lib" }
+          $staticLibName = Split-Path -Leaf $staticLib
           if (Test-Path $staticLib) {
-            & cl.exe /nologo /MD /O2 /I"$incDir" "$testSrc" /link /LIBPATH:"$libDir" libvosk.lib ws2_32.lib advapi32.lib userenv.lib /OUT:"tests\test_e2e_static.exe"
+            & cl.exe /nologo /MD /O2 /I"$incDir" "$testSrc" /link /LIBPATH:"$libDir" $staticLibName ws2_32.lib advapi32.lib userenv.lib /OUT:"tests\test_e2e_static.exe"
             if ($LASTEXITCODE -ne 0) {
               Write-Error "Static lib test compilation failed with exit code $LASTEXITCODE"
               exit 1
@@ -249,7 +250,7 @@ jobs:
             }
             Write-Host "[PASS] [2/2] Static lib E2E test passed." -ForegroundColor Green
           } else {
-            Write-Warning "libvosk.lib not found, skipping static lib test."
+            Write-Warning "Static library not found, skipping static lib test."
           }
 
       - name: Upload Target Artifact

@@ -15,6 +15,7 @@ tests/model/
 tests/test_e2e_*
 !tests/test.wav
 !tests/model.zip
+tools/__pycache__
 
 # OS / Editor Junk Files
 .DS_Store

@@ -25,6 +25,8 @@ param (
 )
 
 $ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+$OutputEncoding = [System.Text.UTF8Encoding]::new()
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
 Set-Location $ScriptDir
@@ -263,8 +265,6 @@ function Build-Target-Arch([string]$targetArch) {
         "/c",
         "/std:c++17",
         "/O2",
-        "/Gy",
-        "/Gw",
         "/EHsc",
         "/MD",
         "/DNOMINMAX",
@@ -327,8 +327,6 @@ function Build-Target-Arch([string]$targetArch) {
         "/c",
         "/std:c++17",
         "/O2",
-        "/Gy",
-        "/Gw",
         "/EHsc",
         "/MD",
         "/DNOMINMAX",
@@ -430,10 +428,9 @@ function Build-Target-Arch([string]$targetArch) {
     $fstLibs = @($fstLibOut)
 
     if ($LinkType -eq "all" -or $LinkType -eq "static") {
-        Write-Host "--> Packaging static library (libvosk.lib)..." -ForegroundColor Green
+        Write-Host "--> Packaging static library (libvosk_static.lib)..." -ForegroundColor Green
         
-        $staticOut = Join-Path $OutDir "libvosk.lib"
-        $staticOutAlt = Join-Path $OutDir "libvosk_static.lib"
+        $staticOut = Join-Path $OutDir "libvosk_static.lib"
         
         $rspFile = Join-Path $BuildWorkDir "static_lib.rsp"
         $rspLines = @("/NOLOGO", "/OUT:$staticOut") + $allObjs + $fstLibs + $mathLibs
@@ -455,8 +452,6 @@ function Build-Target-Arch([string]$targetArch) {
             Write-Warning "slim_archive.py or vosk_api.h not found, skipping slimming. slimTool=$slimTool headerFile=$headerFile"
         }
 
-        Copy-Item -Path $staticOut -Destination $staticOutAlt -Force
-
         $libSizeMB = [Math]::Round((Get-Item $staticOut).Length / 1MB, 2)
         Write-Host "MSVC static library generated: $staticOut (${libSizeMB} MB)" -ForegroundColor Green
     }
@@ -468,7 +463,7 @@ function Build-Target-Arch([string]$targetArch) {
         Write-Host "--> Linking dynamic library (libvosk.dll)..." -ForegroundColor Green
         
         $dllOut = Join-Path $OutDir "libvosk.dll"
-        $implibOut = if ($LinkType -eq "all") { Join-Path $OutDir "libvosk_dll.lib" } else { Join-Path $OutDir "libvosk.lib" }
+        $implibOut = Join-Path $OutDir "libvosk.lib"
         
         $defFile = Join-Path $ScriptDir "libvosk.def"
         $defArg = if (Test-Path $defFile) { "/DEF:$defFile" } else { "" }
@@ -497,6 +492,7 @@ function Build-Target-Arch([string]$targetArch) {
         }
 
         $dllSizeMB = [Math]::Round((Get-Item $dllOut).Length / 1MB, 2)
+        Remove-Item -Path "$OutDir\*.exp" -Force -ErrorAction SilentlyContinue
         Write-Host "MSVC dynamic library generated: $dllOut (${dllSizeMB} MB)" -ForegroundColor Green
     }
 
